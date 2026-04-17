@@ -163,11 +163,14 @@ public final class RecordingCoordinator {
         }
         self.lastTranscript = transcript
 
-        // 登记 Whisper raw transcript 版本
+        // 把合并后的完整 transcript 落盘为 mixed.json（分段转写时 chunk 子目录无此文件）
+        // MeetingDetailView 和后续处理均依赖此文件，必须在这里保证存在。
         let transcriptPath = paths.transcriptDir.appendingPathComponent("mixed.json")
-        if FileManager.default.fileExists(atPath: transcriptPath.path) {
-            _ = try? store.addTranscriptVersion(meetingID: meetingID, kind: "raw", path: transcriptPath)
+        if !FileManager.default.fileExists(atPath: transcriptPath.path),
+           let data = try? JSONEncoder().encode(transcript) {
+            try? data.write(to: transcriptPath, options: .atomic)
         }
+        _ = try? store.addTranscriptVersion(meetingID: meetingID, kind: "raw", path: transcriptPath)
 
         // ── 说话人分离（可降级）────────────────────────────────────────────
         self.processingStage = .diarizing
@@ -209,9 +212,15 @@ public final class RecordingCoordinator {
         // Gemma 纪要（分段摘要 + 二次汇总，防长会 OOM）
         self.processingStage = .summarizing
         taskQueue.updateStage(meetingID: meetingID, stage: .summarizing)
+
+        // prompt_hash 在调用前计算，保持"输入指纹"语义（与模型输出无关）
+        let spk = speakerSegments
+        let promptHash = GemmaRunner.promptHash(
+            SummaryPrompt.build(transcript: transcript, speakerSegments: spk)
+        )
+
         let markdown: String
         do {
-            let spk = speakerSegments
             markdown = try await Task.detached(priority: .userInitiated) {
                 try GemmaRunner.summarizeSmart(
                     transcript: transcript,
@@ -234,7 +243,7 @@ public final class RecordingCoordinator {
             meetingID: meetingID,
             path: summaryPath,
             model: GemmaRunner.model,
-            promptHash: GemmaRunner.promptHash(markdown)
+            promptHash: promptHash
         )
 
         // 标题：取 summary 第一行非空作为标题（去掉 markdown 标记）
