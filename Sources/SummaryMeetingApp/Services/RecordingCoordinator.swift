@@ -26,7 +26,11 @@ public final class RecordingCoordinator {
     }
 
     public func start() async {
-        guard case .idle = state else { return }
+        // 允许从 idle 或上一次 failed 重新开始
+        switch state {
+        case .idle, .failed: break
+        default: return
+        }
         self.lastError = nil
         self.lastTranscript = nil
         self.lastSummaryMarkdown = nil
@@ -56,7 +60,10 @@ public final class RecordingCoordinator {
         do {
             try mic.start(to: paths.micWav)
         } catch {
-            self.state = .failed(message: "麦克风启动失败: \(error.localizedDescription)")
+            let reason = "麦克风启动失败: \(error.localizedDescription)"
+            self.state = .failed(message: reason)
+            // 把刚插入的 recording 行标记为 failed，避免历史侧栏出现永久"录制中"幽灵行
+            markFailed(meetingID: id, reason: reason)
             return
         }
 
@@ -76,6 +83,7 @@ public final class RecordingCoordinator {
     public func pause() {
         guard case .recording = state else { return }
         mic.pause()
+        system.pause()   // 同时暂停系统音频，避免暂停期间对端声音混入录制
         if let resumedAt = resumedAt {
             pausedAccumulated += Date().timeIntervalSince(resumedAt)
         }
@@ -86,6 +94,7 @@ public final class RecordingCoordinator {
     public func resume() {
         guard case .paused = state else { return }
         mic.resume()
+        system.resume()  // 同步恢复系统音频
         self.resumedAt = Date()
         if let startedAt = startedAt {
             self.state = .recording(startedAt: startedAt)

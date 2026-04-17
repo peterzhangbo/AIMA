@@ -25,6 +25,7 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
     private var audioInput: AVAssetWriterInput?
     private let queue = DispatchQueue(label: "system-audio-capture")
     private var sessionStarted = false
+    private var isPaused: Bool = false   // 暂停期间丢弃到来的音频帧
     public private(set) var outputURL: URL?
     public private(set) var lastError: Error?
 
@@ -65,6 +66,11 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
         self.stream = stream
         self.outputURL = url
     }
+
+    /// 暂停时丢弃新到来的音频帧（stream 仍在运行，但不写入文件）
+    public func pause() { isPaused = true }
+    /// 恢复写入
+    public func resume() { isPaused = false }
 
     public func stop() async {
         if let stream = stream {
@@ -110,6 +116,7 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
 
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, CMSampleBufferDataIsReady(sampleBuffer) else { return }
+        guard !isPaused else { return }   // 暂停期间静默丢弃
         guard let writer = writer, let input = audioInput else { return }
 
         if !sessionStarted {
