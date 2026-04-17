@@ -5,9 +5,8 @@ diarize.py <audio_path>
 调用 pyannote.audio 3.x 说话人分离，结果以 JSON 输出到 stdout：
 [{"start": 0.123, "end": 2.456, "speaker": "SPEAKER_00"}, ...]
 
-环境要求：
-  pip install pyannote.audio
-  export HF_TOKEN=<huggingface_token>   (或 ~/.hf_token / ~/.huggingface/token)
+模型已在本地缓存时无需 HF_TOKEN，直接离线加载。
+仅在缓存缺失且需要下载时才需要 token。
 """
 
 import sys
@@ -38,15 +37,6 @@ def main():
         print(f"File not found: {audio_path}", file=sys.stderr)
         sys.exit(1)
 
-    hf_token = read_hf_token()
-    if not hf_token:
-        print(
-            "HF_TOKEN 未设置。请在 ~/.hf_token 中写入 Hugging Face token，"
-            "或通过环境变量 HF_TOKEN= 传入。",
-            file=sys.stderr,
-        )
-        sys.exit(2)
-
     try:
         from pyannote.audio import Pipeline
     except ImportError:
@@ -58,10 +48,25 @@ def main():
         sys.exit(3)
 
     try:
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token,
-        )
+        # 优先从本地缓存加载（不联网）；token 仅在缓存缺失需要下载时有用
+        hf_token = read_hf_token()
+        try:
+            pipeline = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-3.1",
+                use_auth_token=hf_token,
+            )
+        except Exception as e:
+            # 如果加载失败且没有 token，给出有用提示
+            if hf_token is None:
+                print(
+                    f"模型加载失败（本地缓存可能不完整）: {e}\n"
+                    "如需重新下载，请设置 HF_TOKEN：\n"
+                    "  echo 'hf_xxx' > ~/.hf_token",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"模型加载失败: {e}", file=sys.stderr)
+            sys.exit(4)
 
         # Apple Silicon：优先使用 MPS
         try:

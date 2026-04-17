@@ -15,7 +15,6 @@ public enum DiarizeError: Error, LocalizedError {
     case scriptNotFound(String)
     case nonZeroExit(code: Int32, stderr: String)
     case parseError(String)
-    case noToken
 
     public var errorDescription: String? {
         switch self {
@@ -25,8 +24,6 @@ public enum DiarizeError: Error, LocalizedError {
             return "pyannote 退出码 \(c)：\(e.prefix(300))"
         case .parseError(let m):
             return "解析 diarize JSON 失败: \(m)"
-        case .noToken:
-            return "HF_TOKEN 未配置，请在 ~/.hf_token 中写入 Hugging Face token"
         }
     }
 }
