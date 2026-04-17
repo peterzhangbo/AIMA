@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift build:*)",
+      "Bash(chmod +x /Users/saul/Documents/Develop/summaryMeeting/scripts/build_app.sh)",
+      "Bash(bash /Users/saul/Documents/Develop/summaryMeeting/scripts/build_app.sh debug)",
+      "Bash(bash scripts/build_app.sh debug)",
+      "Bash(npx skills *)"
+    ]
+  }
+}
