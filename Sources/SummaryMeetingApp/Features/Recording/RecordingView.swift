@@ -140,6 +140,7 @@ struct RecordingView: View {
             switch stage {
             case .savingAudio:       return ("音频保存中", false)
             case .transcribing:      return ("Whisper 转写中（本地推理，请耐心等待）", false)
+            case .diarizing:         return ("说话人分离中（pyannote）", false)
             case .parsingTranscript: return ("解析转写结果", false)
             case .summarizing:       return ("Gemma 生成纪要中（本地推理，请耐心等待）", false)
             case .completed:         return ("处理完成 · 可返回历史查看", true)

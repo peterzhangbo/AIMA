@@ -24,6 +24,7 @@ public enum RecordingState: Equatable, Sendable {
 public enum ProcessingStage: String, Sendable, Codable {
     case savingAudio
     case transcribing
+    case diarizing      // 说话人分离（可降级）
     case parsingTranscript
     case summarizing
     case completed

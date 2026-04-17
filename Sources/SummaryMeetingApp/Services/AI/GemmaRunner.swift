@@ -124,32 +124,54 @@ public enum GemmaRunner {
 }
 
 public enum SummaryPrompt {
-    public static func build(transcript: Transcript, title: String? = nil) -> String {
+
+    /// 构建 Gemma 纪要 prompt。
+    /// - 若提供了 `speakerSegments`（多人稿），则以 `[SPEAKER_XX] text` 格式生成逐字稿正文；
+    /// - 否则回退到 Whisper 单人逐字稿。
+    public static func build(
+        transcript: Transcript,
+        speakerSegments: [SpeakerSegment]? = nil,
+        title: String? = nil
+    ) -> String {
         let head: String
         if let t = title, !t.isEmpty {
             head = "会议主题：\(t)\n\n"
         } else {
             head = ""
         }
-        let body = transcript.segments.isEmpty
-            ? transcript.text
-            : transcript.segments.map { seg in
+
+        let body: String
+        if let segs = speakerSegments, !segs.isEmpty {
+            // 多人稿：带说话人标签
+            body = segs.map { seg in
+                let tc = String(format: "[%02d:%02d]", Int(seg.start) / 60, Int(seg.start) % 60)
+                return "\(tc) [\(seg.speaker)] \(seg.text)"
+            }.joined(separator: "\n")
+        } else if !transcript.segments.isEmpty {
+            body = transcript.segments.map { seg in
                 String(format: "[%02d:%02d] %@", Int(seg.start) / 60, Int(seg.start) % 60, seg.text)
             }.joined(separator: "\n")
+        } else {
+            body = transcript.text
+        }
+
+        let speakerNote = (speakerSegments != nil && !(speakerSegments?.isEmpty ?? true))
+            ? "\n- 逐字稿中 [SPEAKER_XX] 为说话人编号，请在纪要中保留或根据上下文替换为实际角色。"
+            : ""
 
         return """
         \(head)以下是一段会议的逐字稿，请用中文生成结构化的会议纪要，必须使用 Markdown 格式，包含如下分节：
 
         1. **会议概述**（2-3 句话总结背景与目标）
         2. **关键决策**（列出达成的一致意见）
-        3. **讨论要点**（分话题整理关键观点）
+        3. **讨论要点**（分话题整理关键观点，可按说话人区分）
         4. **行动项**（每条 `- [ ] 任务描述（负责人｜截止时间）` 形式；若无法判断负责人或时间，写"待定"）
         5. **待跟进问题**（尚未有结论的议题）
 
         要求：
         - 忠实于逐字稿，不捏造信息。
         - 使用原文中的人名/项目名。
-        - 若逐字稿信息不足以填充某节，可写"（无）"。
+        - 若逐字稿信息不足以填充某节，可写"（无）"。\(speakerNote)
 
         逐字稿：
         ---

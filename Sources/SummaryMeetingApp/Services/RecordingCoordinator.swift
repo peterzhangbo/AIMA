@@ -9,6 +9,7 @@ public final class RecordingCoordinator {
     public private(set) var currentPaths: SessionPaths?
     public private(set) var processingStage: ProcessingStage?
     public private(set) var lastTranscript: Transcript?
+    public private(set) var lastSpeakerSegments: [SpeakerSegment]?   // nil = 分离未运行或已降级
     public private(set) var lastSummaryMarkdown: String?
     public private(set) var lastError: String?
     public private(set) var lastCompletedMeetingID: MeetingID?
@@ -33,6 +34,7 @@ public final class RecordingCoordinator {
         }
         self.lastError = nil
         self.lastTranscript = nil
+        self.lastSpeakerSegments = nil
         self.lastSummaryMarkdown = nil
         self.processingStage = nil
         self.systemAudioDegraded = false
@@ -151,15 +153,51 @@ public final class RecordingCoordinator {
         }
         self.lastTranscript = transcript
 
-        // 登记 transcript 版本
+        // 登记 Whisper raw transcript 版本
         let transcriptPath = paths.transcriptDir.appendingPathComponent("mixed.json")
         if FileManager.default.fileExists(atPath: transcriptPath.path) {
             _ = try? store.addTranscriptVersion(meetingID: meetingID, kind: "raw", path: transcriptPath)
         }
 
+        // ── 说话人分离（可降级）────────────────────────────────────────────
+        self.processingStage = .diarizing
+        var speakerSegments: [SpeakerSegment]? = nil
+        do {
+            let segs = try await Task.detached(priority: .userInitiated) {
+                try DiarizeRunner.diarize(
+                    audio: paths.mixedWav,
+                    outputDir: paths.transcriptDir,
+                    logTo: paths.logFile
+                )
+            }.value
+
+            let raw   = TranscriptMerger.mergeRaw(transcript: transcript, diarization: segs)
+            let clean = TranscriptMerger.mergeClean(raw: raw)
+
+            // 落盘
+            try? TranscriptMerger.save(raw,   to: paths.multiSpeakerRawJSON)
+            try? TranscriptMerger.save(clean, to: paths.multiSpeakerCleanJSON)
+
+            // 登记多人稿版本
+            _ = try? store.addTranscriptVersion(meetingID: meetingID, kind: "multispk_raw",   path: paths.multiSpeakerRawJSON)
+            _ = try? store.addTranscriptVersion(meetingID: meetingID, kind: "multispk_clean", path: paths.multiSpeakerCleanJSON)
+
+            speakerSegments = clean
+            self.lastSpeakerSegments = clean
+        } catch {
+            // 分离失败：记录日志，继续用单人稿生成纪要，整场会议不失败
+            let msg = "说话人分离降级: \(error.localizedDescription)"
+            if let data = (msg + "\n").data(using: .utf8),
+               let fh = try? FileHandle(forWritingTo: paths.logFile) {
+                fh.seekToEndOfFile(); fh.write(data); try? fh.close()
+            }
+            self.lastError = msg   // UI 可选择展示降级提示
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         // Gemma 纪要
         self.processingStage = .summarizing
-        let prompt = SummaryPrompt.build(transcript: transcript)
+        let prompt = SummaryPrompt.build(transcript: transcript, speakerSegments: speakerSegments)
         let markdown: String
         do {
             markdown = try await Task.detached(priority: .userInitiated) {

@@ -10,6 +10,9 @@ public struct SessionPaths {
     public var mixedWav: URL { directory.appendingPathComponent("mixed.wav") }
     public var transcriptDir: URL { directory.appendingPathComponent("transcript", isDirectory: true) }
     public var transcriptJSON: URL { transcriptDir.appendingPathComponent("mixed.json") }
+    public var diarizeJSON: URL { transcriptDir.appendingPathComponent("diarize.json") }
+    public var multiSpeakerRawJSON: URL { transcriptDir.appendingPathComponent("multispeaker_raw.json") }
+    public var multiSpeakerCleanJSON: URL { transcriptDir.appendingPathComponent("multispeaker_clean.json") }
     public var summaryDir: URL { directory.appendingPathComponent("summary", isDirectory: true) }
     public var logFile: URL { directory.appendingPathComponent("run.log") }
 
