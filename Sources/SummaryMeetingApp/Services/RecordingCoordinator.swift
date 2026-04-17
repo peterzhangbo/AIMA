@@ -15,6 +15,7 @@ public final class RecordingCoordinator {
     public private(set) var lastCompletedMeetingID: MeetingID?
 
     private let store: MeetingStore
+    private let taskQueue: TaskQueue
     private let mic = MicRecorder()
     private let system = SystemAudioRecorder()
     private var startedAt: Date?
@@ -24,6 +25,7 @@ public final class RecordingCoordinator {
 
     public init(store: MeetingStore) {
         self.store = store
+        self.taskQueue = TaskQueue(dbQueue: store.dbQueue)
     }
 
     public func start() async {
@@ -119,6 +121,13 @@ public final class RecordingCoordinator {
             return
         }
 
+        // 立即标记为 processing，历史侧栏可见 + 任务队列持久化
+        if var m = try? store.meeting(id: meetingID) {
+            m.status = .processing
+            try? store.upsert(m)
+        }
+        taskQueue.upsert(ProcessingTask(meetingID: meetingID, stage: .savingAudio))
+
         // 混音
         do {
             try AudioMixer.mix(
@@ -134,8 +143,9 @@ public final class RecordingCoordinator {
             return
         }
 
-        // Whisper 转写
+        // Whisper 转写（自动分段）
         self.processingStage = .transcribing
+        taskQueue.updateStage(meetingID: meetingID, stage: .transcribing)
         let transcript: Transcript
         do {
             transcript = try await Task.detached(priority: .userInitiated) {
@@ -161,6 +171,7 @@ public final class RecordingCoordinator {
 
         // ── 说话人分离（可降级）────────────────────────────────────────────
         self.processingStage = .diarizing
+        taskQueue.updateStage(meetingID: meetingID, stage: .diarizing)
         var speakerSegments: [SpeakerSegment]? = nil
         do {
             let segs = try await Task.detached(priority: .userInitiated) {
@@ -195,13 +206,18 @@ public final class RecordingCoordinator {
         }
         // ──────────────────────────────────────────────────────────────────
 
-        // Gemma 纪要
+        // Gemma 纪要（分段摘要 + 二次汇总，防长会 OOM）
         self.processingStage = .summarizing
-        let prompt = SummaryPrompt.build(transcript: transcript, speakerSegments: speakerSegments)
+        taskQueue.updateStage(meetingID: meetingID, stage: .summarizing)
         let markdown: String
         do {
+            let spk = speakerSegments
             markdown = try await Task.detached(priority: .userInitiated) {
-                try GemmaRunner.summarize(prompt: prompt, logTo: paths.logFile)
+                try GemmaRunner.summarizeSmart(
+                    transcript: transcript,
+                    speakerSegments: spk,
+                    logTo: paths.logFile
+                )
             }.value
         } catch {
             self.processingStage = .failed
@@ -218,7 +234,7 @@ public final class RecordingCoordinator {
             meetingID: meetingID,
             path: summaryPath,
             model: GemmaRunner.model,
-            promptHash: GemmaRunner.promptHash(prompt)
+            promptHash: GemmaRunner.promptHash(markdown)
         )
 
         // 标题：取 summary 第一行非空作为标题（去掉 markdown 标记）
@@ -237,6 +253,7 @@ public final class RecordingCoordinator {
         self.lastCompletedMeetingID = meetingID
         self.processingStage = .completed
         self.state = .idle
+        taskQueue.markCompleted(meetingID: meetingID)
     }
 
     private func markFailed(meetingID: MeetingID, reason: String) {
@@ -245,6 +262,7 @@ public final class RecordingCoordinator {
             m.failureReason = reason
             try? store.upsert(m)
         }
+        taskQueue.markFailed(meetingID: meetingID, error: reason)
     }
 
     public var degraded: Bool { systemAudioDegraded }

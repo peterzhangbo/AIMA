@@ -6,6 +6,61 @@ public enum GemmaRunner {
 
     /// 按 docs/01_environment_baseline.md 固定命令调用 mlx_vlm generate。
     /// max-tokens 保守设置（参考 docs/10 长会 OOM 教训）。
+    /// 智能纪要：短稿直接生成，长稿（>120段 或 >8000字）自动分段摘要 + 二次汇总。
+    public static func summarizeSmart(
+        transcript: Transcript,
+        speakerSegments: [SpeakerSegment]? = nil,
+        segmentsPerChunk: Int = 120,
+        logTo: URL? = nil
+    ) throws -> String {
+        let segCount = speakerSegments?.count ?? transcript.segments.count
+        let charCount = (speakerSegments?.map(\.text).joined() ?? transcript.text).count
+
+        // 短稿直接走单次
+        if segCount <= segmentsPerChunk && charCount <= 8_000 {
+            return try summarize(
+                prompt: SummaryPrompt.build(transcript: transcript, speakerSegments: speakerSegments),
+                logTo: logTo
+            )
+        }
+
+        // 分段纪要
+        let chunkSize = segmentsPerChunk
+        var partSummaries: [String] = []
+
+        if let spk = speakerSegments, !spk.isEmpty {
+            let chunks = stride(from: 0, to: spk.count, by: chunkSize).map {
+                Array(spk[$0 ..< min($0 + chunkSize, spk.count)])
+            }
+            for (i, chunk) in chunks.enumerated() {
+                let prompt = SummaryPrompt.buildPart(
+                    speakerSegments: chunk, partIndex: i + 1, totalParts: chunks.count
+                )
+                let partial = try summarize(prompt: prompt, maxTokens: 3000, logTo: logTo)
+                partSummaries.append(partial)
+            }
+        } else {
+            let segsFlat = transcript.segments
+            let chunks = stride(from: 0, to: segsFlat.count, by: chunkSize).map {
+                Array(segsFlat[$0 ..< min($0 + chunkSize, segsFlat.count)])
+            }
+            for (i, chunk) in chunks.enumerated() {
+                let subTranscript = Transcript(language: transcript.language,
+                                               text: chunk.map(\.text).joined(separator: " "),
+                                               segments: chunk)
+                let prompt = SummaryPrompt.buildPart(
+                    transcript: subTranscript, partIndex: i + 1, totalParts: chunks.count
+                )
+                let partial = try summarize(prompt: prompt, maxTokens: 3000, logTo: logTo)
+                partSummaries.append(partial)
+            }
+        }
+
+        // 二次汇总
+        let mergePrompt = SummaryPrompt.buildMerge(partSummaries: partSummaries)
+        return try summarize(prompt: mergePrompt, maxTokens: 6000, logTo: logTo)
+    }
+
     public static func summarize(
         prompt: String,
         maxTokens: Int = 8192,
@@ -176,6 +231,64 @@ public enum SummaryPrompt {
         逐字稿：
         ---
         \(body)
+        ---
+        """
+    }
+
+    // MARK: - 分段 prompt（长会用）
+
+    /// 对长会的某一分段生成局部摘要（不要求完整五节，只提炼要点）
+    public static func buildPart(
+        transcript: Transcript? = nil,
+        speakerSegments: [SpeakerSegment]? = nil,
+        partIndex: Int,
+        totalParts: Int
+    ) -> String {
+        let body: String
+        if let segs = speakerSegments, !segs.isEmpty {
+            body = segs.map { seg in
+                let tc = String(format: "[%02d:%02d]", Int(seg.start) / 60, Int(seg.start) % 60)
+                return "\(tc) [\(seg.speaker)] \(seg.text)"
+            }.joined(separator: "\n")
+        } else if let t = transcript {
+            body = t.segments.isEmpty ? t.text :
+                t.segments.map { seg in
+                    String(format: "[%02d:%02d] %@", Int(seg.start) / 60, Int(seg.start) % 60, seg.text)
+                }.joined(separator: "\n")
+        } else {
+            body = ""
+        }
+        return """
+        这是一场长会的第 \(partIndex)/\(totalParts) 段逐字稿。
+        请用中文提炼此段的：关键决策、讨论要点、行动项、待跟进问题。
+        格式自由，尽量精简，不需要完整五节，不要捏造内容。
+
+        逐字稿片段：
+        ---
+        \(body)
+        ---
+        """
+    }
+
+    /// 将多段局部摘要二次合并为标准五节格式纪要
+    public static func buildMerge(partSummaries: [String]) -> String {
+        let combined = partSummaries.enumerated().map { i, s in
+            "### 第 \(i + 1) 段摘要\n\(s)"
+        }.joined(separator: "\n\n")
+        return """
+        以下是一场长会按时间顺序拆分的 \(partSummaries.count) 段局部摘要。
+        请将它们整合为一份完整的会议纪要，使用 Markdown 格式，包含如下分节：
+
+        1. **会议概述**（2-3 句话）
+        2. **关键决策**
+        3. **讨论要点**
+        4. **行动项**（`- [ ] 任务（负责人｜截止时间）`）
+        5. **待跟进问题**
+
+        要求：去重、合并相似条目，保留原文人名/项目名，若某节内容不足写"（无）"。
+
+        ---
+        \(combined)
         ---
         """
     }

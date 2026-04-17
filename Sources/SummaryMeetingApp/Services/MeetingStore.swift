@@ -22,7 +22,7 @@ public struct SummaryVersion: Identifiable, Sendable, Equatable {
 
 @MainActor
 public final class MeetingStore {
-    private let dbQueue: DatabaseQueue
+    private(set) var dbQueue: DatabaseQueue
 
     public init(dbURL: URL) throws {
         try FileManager.default.createDirectory(
@@ -66,6 +66,16 @@ public final class MeetingStore {
                 t.column("prompt_hash", .text)
                 t.column("created_at", .datetime).notNull()
                 t.column("note", .text)
+            }
+        }
+        migrator.registerMigration("v2") { db in
+            try db.create(table: "tasks") { t in
+                t.column("meeting_id", .text).primaryKey()
+                t.column("stage", .text).notNull()
+                t.column("state", .text).notNull()
+                t.column("attempts", .integer).notNull().defaults(to: 1)
+                t.column("last_error", .text)
+                t.column("updated_at", .datetime).notNull()
             }
         }
         try migrator.migrate(dbQueue)
