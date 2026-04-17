@@ -100,17 +100,41 @@ public enum DiarizeRunner {
         return nil
     }
 
-    /// 定位 `scripts/` 目录：
-    /// - 开发期：相对于 `#file` 编译期路径（`swift run` 可用）
-    /// - 未来 .app bundle：可扩展为 Bundle.main 查找
+    /// 定位 `scripts/` 目录，按优先级依次尝试三个位置：
+    ///
+    /// 1. `.app` bundle — `Contents/Resources/scripts/`（build_app.sh 复制进去）
+    /// 2. `swift run` 开发构建 — 可执行文件上溯两级到仓库根（`.build/debug/exe` → repo）
+    /// 3. `#file` 编译期路径 — 源码树内最终兜底
     private static func scriptsDir() -> URL {
-        // #file 在编译期展开为源文件的绝对路径
-        // DiarizeRunner.swift → AI/ → Services/ → SummaryMeetingApp/ → Sources/ → repo root
-        let repoRoot = URL(fileURLWithPath: #file)
+        let needle = "diarize.py"
+        let fm = FileManager.default
+
+        // 1. .app bundle: Contents/Resources/scripts/
+        if let resURL = Bundle.main.resourceURL {
+            let candidate = resURL.appendingPathComponent("scripts")
+            if fm.fileExists(atPath: candidate.appendingPathComponent(needle).path) {
+                return candidate
+            }
+        }
+
+        // 2. swift run: 可执行文件在 .build/debug/，再上溯两层到仓库根
+        let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let devCandidate = execURL
+            .deletingLastPathComponent()  // debug/ 或 release/
+            .deletingLastPathComponent()  // .build/
+            .appendingPathComponent("scripts")
+        if fm.fileExists(atPath: devCandidate.appendingPathComponent(needle).path) {
+            return devCandidate
+        }
+
+        // 3. #file 编译期路径（源码树内兜底）
+        //    DiarizeRunner.swift → AI/ → Services/ → SummaryMeetingApp/ → Sources/ → repo root
+        let compileFallback = URL(fileURLWithPath: #file)
             .deletingLastPathComponent()  // AI/
             .deletingLastPathComponent()  // Services/
             .deletingLastPathComponent()  // SummaryMeetingApp/
             .deletingLastPathComponent()  // Sources/
-        return repoRoot.appendingPathComponent("scripts")
+            .appendingPathComponent("scripts")
+        return compileFallback
     }
 }

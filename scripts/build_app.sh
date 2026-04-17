@@ -21,6 +21,8 @@ rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}/Contents/MacOS"
 mkdir -p "${APP_DIR}/Contents/Resources"
 cp "${BIN_PATH}" "${APP_DIR}/Contents/MacOS/${BIN_NAME}"
+# Python 辅助脚本（diarize.py 等）打包进 bundle，供 DiarizeRunner 定位
+cp -r scripts/ "${APP_DIR}/Contents/Resources/scripts/"
 
 cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

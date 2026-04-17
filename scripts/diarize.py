@@ -48,16 +48,18 @@ def main():
         sys.exit(3)
 
     try:
-        # 优先从本地缓存加载（不联网）；token 仅在缓存缺失需要下载时有用
         hf_token = read_hf_token()
+        # 无 token → local_files_only=True，完全离线，不发起任何网络请求。
+        # 有 token  → 允许联网（用于首次下载或版本更新）。
+        offline = hf_token is None
         try:
             pipeline = Pipeline.from_pretrained(
                 "pyannote/speaker-diarization-3.1",
                 use_auth_token=hf_token,
+                local_files_only=offline,
             )
         except Exception as e:
-            # 如果加载失败且没有 token，给出有用提示
-            if hf_token is None:
+            if offline:
                 print(
                     f"模型加载失败（本地缓存可能不完整）: {e}\n"
                     "如需重新下载，请设置 HF_TOKEN：\n"
