@@ -88,12 +88,11 @@ public enum TranscriptMerger {
     // MARK: - Private
 
     /// 为 Whisper segment 分配说话人：找与之时间重叠最多的 diarize segment。
-    /// 若最大重叠不足 segment 时长的 10%，标记为 "SPEAKER_UNKNOWN"。
+    /// 有任何正重叠就归入该说话人；完全没有重叠时才标记为 "SPEAKER_UNKNOWN"。
     private static func assignSpeaker(
         to seg: TranscriptSegment,
         using diarization: [DiarizeSegment]
     ) -> String {
-        let segDuration = max(seg.end - seg.start, 0.01)
         var bestSpeaker = "SPEAKER_UNKNOWN"
         var bestOverlap: Double = 0
 
@@ -104,6 +103,6 @@ public enum TranscriptMerger {
                 bestSpeaker = d.speaker
             }
         }
-        return bestOverlap >= segDuration * 0.1 ? bestSpeaker : "SPEAKER_UNKNOWN"
+        return bestOverlap > 0 ? bestSpeaker : "SPEAKER_UNKNOWN"
     }
 }
