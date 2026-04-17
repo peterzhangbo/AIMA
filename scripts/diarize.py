@@ -53,9 +53,10 @@ def main():
         # 有 token  → 允许联网（用于首次下载或版本更新）。
         offline = hf_token is None
         try:
+            # pyannote.audio 3.x 将参数从 use_auth_token 改为 token
             pipeline = Pipeline.from_pretrained(
                 "pyannote/speaker-diarization-3.1",
-                use_auth_token=hf_token,
+                token=hf_token,
                 local_files_only=offline,
             )
         except Exception as e:
