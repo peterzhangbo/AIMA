@@ -755,23 +755,27 @@ struct PermissionsView: View {
     }
 
     /// 模型下载步骤（适配硬件档位）。前置阻塞条件：hf-cli 必需且未就绪。
+    /// 默认走 hf-mirror.com 镜像（hf.co 在国内常被墙，镜像在境外也可用）。
+    /// 关键：不要加 `--local-dir`——必须把模型下到默认 HF 缓存（~/.cache/huggingface/hub/...），
+    /// 否则我们的 modelCached() 扫描查不到，UI 会一直显示"未下载"。
     private var modelSteps: [InstallStep] {
         let hfBlocked = model.hfCliEffectivelyRequired && model.hfCli.state != .ok
         let whisperID = model.recommendedWhisper.id
         let gemmaID = model.recommendedGemma.id
         let pyID = model.currentPyannoteID
+        let mirror = "HF_ENDPOINT=https://hf-mirror.com"
         return [
             .init(id: "model.whisper", name: "Whisper 模型",
                   hint: "\(whisperID)（\(model.recommendedWhisper.size)，\(model.recommendedWhisper.note)）",
-                  command: "hf download \(whisperID)",
+                  command: "\(mirror) hf download \(whisperID)",
                   optional: false, result: model.whisperModel, isBlocked: hfBlocked),
             .init(id: "model.gemma", name: "Gemma 模型",
                   hint: "\(gemmaID)（\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）",
-                  command: "hf download \(gemmaID)",
+                  command: "\(mirror) hf download \(gemmaID)",
                   optional: false, result: model.gemmaModel, isBlocked: hfBlocked),
             .init(id: "model.pyannote", name: "pyannote 模型",
                   hint: "\(pyID)（说话人分离，可选）",
-                  command: "hf download \(pyID)",
+                  command: "\(mirror) hf download \(pyID)",
                   optional: true, result: model.pyannoteModel, isBlocked: hfBlocked)
         ]
     }
