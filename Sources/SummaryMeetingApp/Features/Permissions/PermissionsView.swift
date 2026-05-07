@@ -274,6 +274,10 @@ final class PermissionsModel {
             "/Library/Frameworks/Python.framework/Versions/3.11/bin",
             // 用户级
             "\(home)/.local/bin",
+            // pip3 install --user 安装的 CLI 落点（hf 等）
+            "\(home)/Library/Python/3.13/bin",
+            "\(home)/Library/Python/3.12/bin",
+            "\(home)/Library/Python/3.11/bin",
             "\(home)/.pyenv/shims",
             "\(home)/.asdf/shims",
             "\(home)/.local/share/mise/shims",
@@ -653,24 +657,27 @@ struct PermissionsView: View {
                   hint: "音频处理工具（Homebrew 安装）",
                   command: "brew install ffmpeg",
                   optional: false, result: model.ffmpeg, isBlocked: !brewOK),
+            // Homebrew Python 自 PEP 668 起对 system pip 装包加锁；统一用 --break-system-packages --user
+            // 装到用户级 site-packages（~/Library/Python/3.x/lib/python/site-packages 与 .../bin），
+            // 既不污染系统也不需要 venv，python3 import 默认能找到。
             .init(id: "huggingface-cli", name: "huggingface-cli",
                   hint: model.hfCliEffectivelyRequired
                         ? "下载 Whisper / Gemma / pyannote 模型（需先完成 python3）"
                         : "已不再需要（必需模型已下载完成）",
-                  command: "pip3 install -U \"huggingface_hub[cli]\"",
+                  command: "pip3 install --break-system-packages --user -U \"huggingface_hub[cli]\"",
                   optional: !model.hfCliEffectivelyRequired,
                   result: model.hfCli, isBlocked: !pyOK),
             .init(id: "mlx_whisper", name: "mlx_whisper",
                   hint: "语音转文字（必需，需先完成 python3）",
-                  command: "pip3 install mlx-whisper",
+                  command: "pip3 install --break-system-packages --user mlx-whisper",
                   optional: false, result: model.mlxWhisper, isBlocked: !pyOK),
             .init(id: "mlx_vlm", name: "mlx_vlm",
                   hint: "纪要生成（必需，需先完成 python3）",
-                  command: "pip3 install mlx-vlm",
+                  command: "pip3 install --break-system-packages --user mlx-vlm",
                   optional: false, result: model.mlxVlm, isBlocked: !pyOK),
             .init(id: "pyannote.audio", name: "pyannote.audio",
                   hint: "说话人识别（可选，需先完成 python3）",
-                  command: "pip3 install pyannote.audio",
+                  command: "pip3 install --break-system-packages --user pyannote.audio",
                   optional: true, result: model.pyannote, isBlocked: !pyOK)
         ]
     }
