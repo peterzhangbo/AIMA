@@ -666,11 +666,13 @@ struct PermissionsView: View {
             // 既不污染系统也不需要 venv，python3 import 默认能找到。
             // 用 `python3 -m pip` 而非 `pip3`，确保 pip 与 .app 调用的 python3 同一个解释器，
             // 避免 pip3 装到 A、app 用 B 的 user-site 而 import 失败。
+            // hf-cli 推荐 pipx 装：每个 CLI 隔离 venv + 自动符号链到 ~/.local/bin/，
+            // Python 升级也不会失效；远比 pip --user --break-system-packages 干净。
             .init(id: "huggingface-cli", name: "huggingface-cli",
                   hint: model.hfCliEffectivelyRequired
-                        ? "下载 Whisper / Gemma / pyannote 模型（需先完成 python3）"
+                        ? "下载 Whisper / Gemma / pyannote 模型（用 pipx 隔离安装，需先完成 brew + python3）"
                         : "已不再需要（必需模型已下载完成）",
-                  command: "python3 -m pip install --break-system-packages --user -U \"huggingface_hub[cli]\"",
+                  command: "brew install pipx && pipx ensurepath && pipx install \"huggingface_hub[cli]\"",
                   optional: !model.hfCliEffectivelyRequired,
                   result: model.hfCli, isBlocked: !pyOK),
             .init(id: "mlx_whisper", name: "mlx_whisper",
