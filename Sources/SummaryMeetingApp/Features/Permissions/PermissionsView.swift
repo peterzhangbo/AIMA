@@ -85,6 +85,30 @@ final class PermissionsModel {
 
     let hardware: Hardware = PermissionsModel.detectHardware()
 
+    // MARK: HF 镜像探测
+    /// huggingface.co 是否可直连。nil = 未探测；true = 直连；false = 推荐镜像。
+    /// 在 checkDeps 末尾自动探测；UI 据此切换 `hf download` 命令是否带 `HF_ENDPOINT` 前缀。
+    var hfReachable: Bool? = nil
+
+    /// 5 秒短超时探测 hf.co；只看 TCP/TLS 是否通和返回非网络错误，不关心 HTTP code。
+    func probeHFReachable() async {
+        let url = URL(string: "https://huggingface.co/api/whoami")!
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 5
+        req.httpMethod = "HEAD"
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 5
+        cfg.timeoutIntervalForResource = 5
+        let session = URLSession(configuration: cfg)
+        do {
+            _ = try await session.data(for: req)
+            self.hfReachable = true
+        } catch {
+            // 连不通（DNS、超时、TLS、443 被墙）→ 切镜像
+            self.hfReachable = false
+        }
+    }
+
     private static func detectHardware() -> Hardware {
         let bytes = ProcessInfo.processInfo.physicalMemory
         let ramGB = Double(bytes) / 1_073_741_824
@@ -170,8 +194,12 @@ final class PermissionsModel {
         async let m1 = Self.modelCached(currentGemmaID)
         async let m2 = Self.modelCached(currentPyannoteID)
 
+        // hf.co 直连可达性探测（5s 超时；不可达 → 推荐镜像）
+        async let hfPing: Void = probeHFReachable()
+
         let (v2, v3, v4) = await (r2, r3, r4)
         let (w, g, p) = await (m0, m1, m2)
+        await hfPing
         brew       = resolved(name: "brew",            ok: vBrew.ok, path: vBrew.path)
         python3    = resolved(name: "python3",         ok: v0.ok,    path: v0.path)
         ffmpeg     = resolved(name: "ffmpeg",          ok: v1.ok,    path: v1.path)
@@ -436,7 +464,18 @@ struct PermissionsView: View {
 
             // ── AI 模型缓存 ──────────────────────────────────
             CollapsibleSection(title: "AI 模型", allOK: requiredModelsOK) {
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if model.hfReachable == false {
+                        Label("检测到 huggingface.co 直连不可达，已自动切换到 hf-mirror.com 镜像。",
+                              systemImage: "antenna.radiowaves.left.and.right")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else if model.hfReachable == nil {
+                        Label("正在检测 huggingface.co 可达性…未完成前命令暂用镜像版本。",
+                              systemImage: "ellipsis.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if let step = nextModelStep {
                         let idx = (modelSteps.firstIndex(where: { $0.id == step.id }) ?? 0) + 1
                         installGuideCard(step, index: idx, total: modelSteps.count)
@@ -755,7 +794,9 @@ struct PermissionsView: View {
     }
 
     /// 模型下载步骤（适配硬件档位）。前置阻塞条件：hf-cli 必需且未就绪。
-    /// 默认走 hf-mirror.com 镜像（hf.co 在国内常被墙，镜像在境外也可用）。
+    /// 命令前缀按 hf.co 直连可达性自动切换：
+    ///   - 直连可达 (`model.hfReachable == true`) → 直接 `hf download X`
+    ///   - 不可达 (`false`)，或探测尚未完成（`nil`，保守策略）→ `HF_ENDPOINT=https://hf-mirror.com hf download X`
     /// 关键：不要加 `--local-dir`——必须把模型下到默认 HF 缓存（~/.cache/huggingface/hub/...），
     /// 否则我们的 modelCached() 扫描查不到，UI 会一直显示"未下载"。
     private var modelSteps: [InstallStep] {
@@ -763,19 +804,21 @@ struct PermissionsView: View {
         let whisperID = model.recommendedWhisper.id
         let gemmaID = model.recommendedGemma.id
         let pyID = model.currentPyannoteID
-        let mirror = "HF_ENDPOINT=https://hf-mirror.com"
+        // 探测未完成时也用镜像（保守，避免给国内用户错误的不可用命令）
+        let useMirror = (model.hfReachable != true)
+        let prefix = useMirror ? "HF_ENDPOINT=https://hf-mirror.com " : ""
         return [
             .init(id: "model.whisper", name: "Whisper 模型",
                   hint: "\(whisperID)（\(model.recommendedWhisper.size)，\(model.recommendedWhisper.note)）",
-                  command: "\(mirror) hf download \(whisperID)",
+                  command: "\(prefix)hf download \(whisperID)",
                   optional: false, result: model.whisperModel, isBlocked: hfBlocked),
             .init(id: "model.gemma", name: "Gemma 模型",
                   hint: "\(gemmaID)（\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）",
-                  command: "\(mirror) hf download \(gemmaID)",
+                  command: "\(prefix)hf download \(gemmaID)",
                   optional: false, result: model.gemmaModel, isBlocked: hfBlocked),
             .init(id: "model.pyannote", name: "pyannote 模型",
                   hint: "\(pyID)（说话人分离，可选）",
-                  command: "\(mirror) hf download \(pyID)",
+                  command: "\(prefix)hf download \(pyID)",
                   optional: true, result: model.pyannoteModel, isBlocked: hfBlocked)
         ]
     }
