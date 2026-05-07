@@ -114,12 +114,12 @@ final class PermissionsModel {
     }
 
     /// 按硬件档位推荐的模型（不直接改运行时配置，仅显示提示）
+    /// Whisper 1.5 GB 占用极小，所有 Apple Silicon 档位统一推荐 turbo（速度优化版的 large-v3），
+    /// RAM 不参与 Whisper 选型。
     var recommendedWhisper: ModelSpec {
-        switch hardware.tier {
-        case .low:  return .init(id: "mlx-community/whisper-base-mlx",         size: "~150MB", note: "速度快，精度较低")
-        case .mid:  return .init(id: "mlx-community/whisper-large-v3-turbo",   size: "~1.5GB", note: "当前默认，推荐")
-        case .high: return .init(id: "mlx-community/whisper-large-v3-turbo",   size: "~1.5GB", note: "当前默认；追求极致精度可换 whisper-large-v3")
-        }
+        .init(id: "mlx-community/whisper-large-v3-turbo",
+              size: "~1.5GB",
+              note: "Apple Silicon 全档位推荐：基于 large-v3 的速度优化版，质量接近 large-v3")
     }
     var recommendedGemma: ModelSpec {
         switch hardware.tier {
@@ -460,9 +460,10 @@ struct PermissionsView: View {
         }
     }
 
-    // 严格进入条件：系统权限 + 必需工具 + 必需模型缓存（pyannote/其模型为可选）
+    // 严格进入条件：Apple Silicon + 系统权限 + 必需工具 + 必需模型缓存（pyannote/其模型为可选）
     private var canEnter: Bool {
-        model.checksDone
+        model.hardware.isAppleSilicon
+            && model.checksDone
             && model.allGranted
             && model.requiredDepsOK
             && model.whisperModel.state == .ok
@@ -471,6 +472,7 @@ struct PermissionsView: View {
 
     private var entryBlockers: [String] {
         var out: [String] = []
+        if !model.hardware.isAppleSilicon { out.append("Apple Silicon") }
         if !model.micGranted        { out.append("麦克风") }
         if !model.screenGranted     { out.append("屏幕录制") }
         if model.brewEffectivelyRequired && model.brew.state != .ok { out.append("Homebrew") }
@@ -488,9 +490,10 @@ struct PermissionsView: View {
 
     private var hardwareBanner: some View {
         let hw = model.hardware
+        let unsupported = !hw.isAppleSilicon
         return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: hw.isAppleSilicon ? "cpu.fill" : "cpu")
-                .foregroundStyle(.blue)
+            Image(systemName: unsupported ? "exclamationmark.triangle.fill" : "cpu.fill")
+                .foregroundStyle(unsupported ? .red : .blue)
                 .font(.title2)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -498,22 +501,29 @@ struct PermissionsView: View {
                     Text("·").foregroundStyle(.tertiary)
                     Text(String(format: "%.0f GB 内存", hw.ramGB))
                         .font(.callout).foregroundStyle(.secondary)
-                    Text(hw.tierLabel)
+                    Text(unsupported ? "不支持" : hw.tierLabel)
                         .font(.caption2)
                         .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(.blue.opacity(0.15))
+                        .background((unsupported ? Color.red : Color.blue).opacity(0.15))
                         .clipShape(Capsule())
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(unsupported ? Color.red : Color.blue)
                 }
-                Text("推荐 Whisper：\(model.recommendedWhisper.id)  （\(model.recommendedWhisper.size)，\(model.recommendedWhisper.note)）")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("推荐 Gemma：\(model.recommendedGemma.id)  （\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）")
-                    .font(.caption).foregroundStyle(.secondary)
+                if unsupported {
+                    Text("AIMA 仅支持 Apple Silicon（M1/M2/M3/M4 系列）。Intel Mac 无 MLX 后端，无法本地运行 Whisper/Gemma。")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("推荐 Whisper：\(model.recommendedWhisper.id)  （\(model.recommendedWhisper.size)，\(model.recommendedWhisper.note)）")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("推荐 Gemma：\(model.recommendedGemma.id)  （\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Spacer()
         }
         .padding(12)
-        .background(.blue.opacity(0.06))
+        .background((unsupported ? Color.red : Color.blue).opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
