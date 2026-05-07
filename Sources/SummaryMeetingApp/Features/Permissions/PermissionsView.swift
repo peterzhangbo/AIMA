@@ -318,6 +318,59 @@ final class PermissionsModel {
 
 // MARK: - PermissionsView
 
+/// 可折叠分区：标题 + 右侧扩展操作（如"重新检查"）+ 折叠箭头。
+/// allOK 翻转时会自动调整展开状态：全 OK → 收起；出现问题 → 自动展开。
+/// 用户手动点击则覆盖至下一次 allOK 翻转。
+private struct CollapsibleSection<Trailing: View, Content: View>: View {
+    let title: String
+    let allOK: Bool
+    @ViewBuilder let trailing: () -> Trailing
+    @ViewBuilder let content: () -> Content
+
+    @State private var expanded: Bool
+
+    init(title: String,
+         allOK: Bool,
+         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
+         @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.allOK = allOK
+        self.trailing = trailing
+        self.content = content
+        self._expanded = State(initialValue: !allOK)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12)
+                    .animation(.easeInOut(duration: 0.15), value: expanded)
+                Text(title).font(.headline).foregroundStyle(.secondary)
+                if allOK {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption).foregroundStyle(.green)
+                }
+                Spacer()
+                trailing()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { expanded.toggle() }
+
+            if expanded {
+                content()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .onChange(of: allOK) { _, ok in
+            // 状态翻转：全 OK → 自动收起；出现问题 → 自动展开。
+            withAnimation(.easeInOut(duration: 0.2)) { expanded = !ok }
+        }
+    }
+}
+
 struct PermissionsView: View {
     @Bindable var model: PermissionsModel
     let onContinue: () -> Void
@@ -333,28 +386,27 @@ struct PermissionsView: View {
             hardwareBanner
 
             // ── 系统权限 ──────────────────────────────────────
-            Text("系统权限").font(.headline).foregroundStyle(.secondary)
-
-            permRow(
-                title: "麦克风",
-                ok: model.micGranted,
-                hint: "用于录制你自己的声音",
-                action: { Task { await model.requestMic() } },
-                actionLabel: "请求权限"
-            )
-
-            permRow(
-                title: "屏幕录制（含系统音频）",
-                ok: model.screenGranted,
-                hint: "用于采集会议对端声音。首次会弹出系统授权窗口。",
-                action: { Task { await model.probeScreen() } },
-                actionLabel: model.checking ? "检查中…" : "检查/请求"
-            )
+            CollapsibleSection(title: "系统权限", allOK: model.allGranted) {
+                VStack(spacing: 8) {
+                    permRow(
+                        title: "麦克风",
+                        ok: model.micGranted,
+                        hint: "用于录制你自己的声音",
+                        action: { Task { await model.requestMic() } },
+                        actionLabel: "请求权限"
+                    )
+                    permRow(
+                        title: "屏幕录制（含系统音频）",
+                        ok: model.screenGranted,
+                        hint: "用于采集会议对端声音。首次会弹出系统授权窗口。",
+                        action: { Task { await model.probeScreen() } },
+                        actionLabel: model.checking ? "检查中…" : "检查/请求"
+                    )
+                }
+            }
 
             // ── 工具依赖 ──────────────────────────────────────
-            HStack {
-                Text("工具依赖").font(.headline).foregroundStyle(.secondary)
-                Spacer()
+            CollapsibleSection(title: "工具依赖", allOK: model.requiredDepsOK) {
                 if model.checkingDeps {
                     ProgressView().controlSize(.mini)
                 } else {
@@ -363,50 +415,44 @@ struct PermissionsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
                 }
-            }
+            } content: {
+                VStack(spacing: 8) {
+                    // 按顺序的"下一步"指引（有依赖关系：python3/ffmpeg → pip 包）
+                    if let step = nextInstallStep { installGuideCard(step) }
 
-            // 按顺序的"下一步"指引（有依赖关系：python3/ffmpeg → pip 包）
-            if let step = nextInstallStep { installGuideCard(step) }
-
-            VStack(spacing: 8) {
-                ForEach(Array(installSteps.enumerated()), id: \.offset) { idx, step in
-                    depRow(
-                        index: idx + 1,
-                        name: step.name,
-                        result: step.result,
-                        hint: step.hint,
-                        fix: step.command,
-                        optional: step.optional,
-                        blocked: step.isBlocked
-                    )
+                    ForEach(Array(installSteps.enumerated()), id: \.offset) { idx, step in
+                        depRow(
+                            index: idx + 1,
+                            name: step.name,
+                            result: step.result,
+                            hint: step.hint,
+                            fix: step.command,
+                            optional: step.optional,
+                            blocked: step.isBlocked
+                        )
+                    }
                 }
             }
 
             // ── AI 模型缓存 ──────────────────────────────────
-            Text("AI 模型").font(.headline).foregroundStyle(.secondary)
-            VStack(spacing: 8) {
-                modelRow(
-                    name: "Whisper",
-                    currentID: model.currentWhisperID,
-                    result: model.whisperModel,
-                    recommended: model.recommendedWhisper,
-                    installCmd: "huggingface-cli download \(model.currentWhisperID)"
-                )
-                modelRow(
-                    name: "Gemma",
-                    currentID: model.currentGemmaID,
-                    result: model.gemmaModel,
-                    recommended: model.recommendedGemma,
-                    installCmd: "huggingface-cli download \(model.currentGemmaID)"
-                )
-                modelRow(
-                    name: "pyannote",
-                    currentID: model.currentPyannoteID,
-                    result: model.pyannoteModel,
-                    recommended: nil,
-                    installCmd: "HF_TOKEN=$(cat ~/.hf_token) huggingface-cli download \(model.currentPyannoteID)",
-                    optional: true
-                )
+            CollapsibleSection(title: "AI 模型", allOK: requiredModelsOK) {
+                VStack(spacing: 8) {
+                    if let step = nextModelStep {
+                        let idx = (modelSteps.firstIndex(where: { $0.id == step.id }) ?? 0) + 1
+                        installGuideCard(step, index: idx, total: modelSteps.count)
+                    }
+                    ForEach(Array(modelSteps.enumerated()), id: \.offset) { idx, step in
+                        depRow(
+                            index: idx + 1,
+                            name: step.name,
+                            result: step.result,
+                            hint: step.hint,
+                            fix: step.command,
+                            optional: step.optional,
+                            blocked: step.isBlocked
+                        )
+                    }
+                }
             }
 
             // 扫描状态提示
@@ -708,10 +754,45 @@ struct PermissionsView: View {
         return pending.first(where: { !$0.optional }) ?? pending.first
     }
 
+    /// 模型下载步骤（适配硬件档位）。前置阻塞条件：hf-cli 必需且未就绪。
+    private var modelSteps: [InstallStep] {
+        let hfBlocked = model.hfCliEffectivelyRequired && model.hfCli.state != .ok
+        let whisperID = model.recommendedWhisper.id
+        let gemmaID = model.recommendedGemma.id
+        let pyID = model.currentPyannoteID
+        return [
+            .init(id: "model.whisper", name: "Whisper 模型",
+                  hint: "\(whisperID)（\(model.recommendedWhisper.size)，\(model.recommendedWhisper.note)）",
+                  command: "hf download \(whisperID)",
+                  optional: false, result: model.whisperModel, isBlocked: hfBlocked),
+            .init(id: "model.gemma", name: "Gemma 模型",
+                  hint: "\(gemmaID)（\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）",
+                  command: "hf download \(gemmaID)",
+                  optional: false, result: model.gemmaModel, isBlocked: hfBlocked),
+            .init(id: "model.pyannote", name: "pyannote 模型",
+                  hint: "\(pyID)（说话人分离，可选）",
+                  command: "hf download \(pyID)",
+                  optional: true, result: model.pyannoteModel, isBlocked: hfBlocked)
+        ]
+    }
+
+    /// 必需模型是否全部就绪（pyannote 可选，不计入）
+    private var requiredModelsOK: Bool {
+        model.whisperModel.state == .ok && model.gemmaModel.state == .ok
+    }
+
+    private var nextModelStep: InstallStep? {
+        let pending = modelSteps.filter {
+            $0.result.state == .missing && !$0.isBlocked
+        }
+        return pending.first(where: { !$0.optional }) ?? pending.first
+    }
+
+    /// 通用引导卡：调用方按所属步骤列表给出 index/total。
     @ViewBuilder
-    private func installGuideCard(_ step: InstallStep) -> some View {
-        let idx = (installSteps.firstIndex(where: { $0.id == step.id }) ?? 0) + 1
-        let total = installSteps.count
+    private func installGuideCard(_ step: InstallStep, index: Int? = nil, total: Int? = nil) -> some View {
+        let idx = index ?? ((installSteps.firstIndex(where: { $0.id == step.id }) ?? 0) + 1)
+        let total = total ?? installSteps.count
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.right.circle.fill")
@@ -759,50 +840,4 @@ struct PermissionsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    @ViewBuilder
-    private func modelRow(
-        name: String,
-        currentID: String,
-        result: PermissionsModel.DepResult,
-        recommended: PermissionsModel.ModelSpec?,
-        installCmd: String,
-        optional: Bool = false
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            depIcon(result: result, optional: optional)
-                .font(.body)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(name).font(.callout.weight(.medium))
-                    if optional {
-                        Text("可选").font(.caption2)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.quaternary)
-                            .clipShape(Capsule())
-                    }
-                    if let rec = recommended, rec.id != currentID {
-                        Text("推荐换用：\(rec.id.components(separatedBy: "/").last ?? rec.id)")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
-                }
-                Text(currentID)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                if result.state == .missing {
-                    Text(installCmd)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.blue)
-                        .textSelection(.enabled)
-                }
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.15))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
 }
