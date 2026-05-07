@@ -153,8 +153,11 @@ final class PermissionsModel {
         }
     }
     /// 当前运行时使用的模型 id（和 Runner 中的常量对应）
-    let currentWhisperID = "mlx-community/whisper-large-v3-turbo"
-    let currentGemmaID   = "mlx-community/gemma-4-26b-a4b-it-4bit"
+    /// 检测/安装命令引用的"当前模型 ID"——直接由推荐档位驱动，
+    /// 保证 推荐显示 / 安装命令 / 检测 / GemmaRunner 运行时四处共用同一个 ID。
+    /// （Whisper 全档位统一为 large-v3-turbo；pyannote 仅一个 community-1。）
+    var currentWhisperID: String { recommendedWhisper.id }
+    var currentGemmaID: String   { recommendedGemma.id }
     let currentPyannoteID = "pyannote/speaker-diarization-community-1"
 
     // MARK: Actions
@@ -424,27 +427,8 @@ struct PermissionsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("权限检查")
-                    .font(.largeTitle.bold())
-                Spacer()
-                if model.checkingDeps {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button {
-                        Task {
-                            // 重新跑全套检查：屏幕录制 + 工具/模型/网络可达性
-                            async let s: Void = model.probeScreen()
-                            async let d: Void = model.checkDeps()
-                            _ = await (s, d)
-                        }
-                    } label: {
-                        Label("重新检查", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
+            Text("权限检查")
+                .font(.largeTitle.bold())
             Text("需要开启系统权限并确认开发工具就绪，才能完整使用 AIMA（会议助手）。")
                 .foregroundStyle(.secondary)
 
@@ -471,7 +455,10 @@ struct PermissionsView: View {
             }
 
             // ── 工具依赖 ──────────────────────────────────────
+            // "重新检查"按钮：默认放工具依赖；工具依赖全 OK 后挪到 AI 模型那行。
             CollapsibleSection(title: "工具依赖", allOK: model.requiredDepsOK) {
+                if !model.requiredDepsOK { recheckButton }
+            } content: {
                 VStack(spacing: 8) {
                     // 按顺序的"下一步"指引（有依赖关系：python3/ffmpeg → pip 包）
                     if let step = nextInstallStep { installGuideCard(step) }
@@ -492,6 +479,8 @@ struct PermissionsView: View {
 
             // ── AI 模型缓存 ──────────────────────────────────
             CollapsibleSection(title: "AI 模型", allOK: requiredModelsOK) {
+                if model.requiredDepsOK { recheckButton }
+            } content: {
                 VStack(alignment: .leading, spacing: 8) {
                     if model.hfReachable == false {
                         Label("检测到 huggingface.co 直连不可达，已自动切换到 hf-mirror.com 镜像。",
@@ -600,6 +589,28 @@ struct PermissionsView: View {
     }
 
     // MARK: Hardware banner
+
+    /// 通用"重新检查"按钮：根据当前 checkingDeps 状态自动显示 spinner / 按钮。
+    /// 一次跑屏幕权限 + 工具/模型/hf 网络可达性。
+    @ViewBuilder
+    private var recheckButton: some View {
+        if model.checkingDeps {
+            ProgressView().controlSize(.mini)
+        } else {
+            Button {
+                Task {
+                    async let s: Void = model.probeScreen()
+                    async let d: Void = model.checkDeps()
+                    _ = await (s, d)
+                }
+            } label: {
+                Label("重新检查", systemImage: "arrow.clockwise")
+            }
+            .font(.caption)
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+        }
+    }
 
     private var hardwareBanner: some View {
         let hw = model.hardware

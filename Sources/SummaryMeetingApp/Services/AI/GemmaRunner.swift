@@ -2,7 +2,17 @@ import Foundation
 import CryptoKit
 
 public enum GemmaRunner {
-    public static let model = "mlx-community/gemma-4-26b-a4b-it-4bit"
+    /// 按硬件档位（RAM）选模型。和 PermissionsModel.recommendedGemma 必须保持同步：
+    /// 安装命令、检测、运行时三处都用同一档对应的 ID。
+    /// - <16GB:  gemma-4-e4b-it-4bit (~3GB)
+    /// - 16-32GB: gemma-4-26b-a4b-it-4bit (~15-18GB)
+    /// - ≥32GB:  gemma-4-31b-it-4bit (~18-22GB)
+    public static var model: String {
+        let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+        if ramGB >= 32 { return "mlx-community/gemma-4-31b-it-4bit" }
+        if ramGB >= 16 { return "mlx-community/gemma-4-26b-a4b-it-4bit" }
+        return "mlx-community/gemma-4-e4b-it-4bit"
+    }
 
     /// 按 docs/01_environment_baseline.md 固定命令调用 mlx_vlm generate。
     /// max-tokens 保守设置（参考 docs/10 长会 OOM 教训）。
