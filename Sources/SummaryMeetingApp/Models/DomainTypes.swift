@@ -33,6 +33,7 @@ public enum ProcessingStage: String, Sendable, Codable {
 
 public enum MeetingStatus: String, Sendable, Codable {
     case recording
+    case queued      // 已停止录制，等待后台流水线
     case processing
     case completed
     case failed

@@ -7,9 +7,11 @@ struct RecordingView: View {
     @State private var ticker: Timer?
 
     private var canLeave: Bool {
+        // 录制 / 暂停时允许返回历史；录制会在后台继续。
+        // 仅在 .preparing / .stopping 这种短暂过渡态禁止离开。
         switch coordinator.state {
-        case .idle, .failed: return true
-        default: return false
+        case .preparing, .stopping: return false
+        default: return true
         }
     }
 

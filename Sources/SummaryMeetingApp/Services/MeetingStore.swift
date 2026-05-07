@@ -173,6 +173,22 @@ public final class MeetingStore {
         }
     }
 
+    public func allTranscriptVersions(meetingID: MeetingID, kind: String) throws -> [TranscriptVersion] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT * FROM transcript_versions WHERE meeting_id = ? AND kind = ? ORDER BY created_at ASC", arguments: [meetingID.raw, kind])
+            return rows.map { row in
+                TranscriptVersion(
+                    id: row["id"],
+                    meetingID: row["meeting_id"],
+                    kind: row["kind"],
+                    path: row["path"],
+                    createdAt: row["created_at"],
+                    note: row["note"]
+                )
+            }
+        }
+    }
+
     // MARK: Summary versions
 
     @discardableResult
@@ -200,6 +216,23 @@ public final class MeetingStore {
                 )
             }
             return nil
+        }
+    }
+
+    public func allSummaryVersions(meetingID: MeetingID) throws -> [SummaryVersion] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT * FROM summary_versions WHERE meeting_id = ? ORDER BY created_at ASC", arguments: [meetingID.raw])
+            return rows.map { row in
+                SummaryVersion(
+                    id: row["id"],
+                    meetingID: row["meeting_id"],
+                    path: row["path"],
+                    model: row["model"],
+                    promptHash: row["prompt_hash"],
+                    createdAt: row["created_at"],
+                    note: row["note"]
+                )
+            }
         }
     }
 }

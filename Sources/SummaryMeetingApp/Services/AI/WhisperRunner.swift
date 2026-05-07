@@ -146,13 +146,18 @@ public enum WhisperRunner {
         let fullText = (obj["text"] as? String) ?? ""
         var segments: [TranscriptSegment] = []
         if let raw = obj["segments"] as? [[String: Any]] {
-            for (i, seg) in raw.enumerated() {
+            var idx = 0
+            for seg in raw {
                 let start = (seg["start"] as? Double) ?? 0
                 let end = (seg["end"] as? Double) ?? start
-                let text = (seg["text"] as? String) ?? ""
-                segments.append(TranscriptSegment(id: i, start: start, end: end, text: text.trimmingCharacters(in: .whitespaces)))
+                let text = ((seg["text"] as? String) ?? "").trimmingCharacters(in: .whitespaces)
+                guard !text.isEmpty else { continue }   // 过滤空段落
+                segments.append(TranscriptSegment(id: idx, start: start, end: end, text: text))
+                idx += 1
             }
         }
+        // 按时间升序（分段转写合并后可能乱序）
+        segments.sort { $0.start < $1.start }
         return Transcript(language: language, text: fullText, segments: segments)
     }
 }

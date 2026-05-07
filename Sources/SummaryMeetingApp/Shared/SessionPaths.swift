@@ -21,6 +21,15 @@ public struct SessionPaths {
         self.meetingID = meetingID
     }
 
+    /// 仅凭 meetingID 推算路径（重新生成纪要等只读场景）
+    public init?(meetingID: MeetingID) {
+        let root = SessionPaths.defaultRoot()
+        self.root = root
+        self.meetingID = meetingID
+        // 验证目录存在
+        if !FileManager.default.fileExists(atPath: self.directory.path) { return nil }
+    }
+
     public func ensureCreated() throws {
         let fm = FileManager.default
         for dir in [directory, transcriptDir, summaryDir] {
