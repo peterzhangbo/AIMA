@@ -557,9 +557,8 @@ struct PermissionsView: View {
             async let d: Void = model.checkDeps()
             _ = await (s, d)
         }
-        .onChange(of: canEnter) { _, ok in
-            if ok { onContinue() }
-        }
+        // 注意：不再监听 canEnter 自动进入。即使所有必需项都通过，可选项（pyannote 等）
+        // 用户可能仍想停留在权限页继续装。统一改成手动点击"进入"按钮触发跳转。
     }
 
     // 严格进入条件：Apple Silicon + 系统权限 + 必需工具 + 必需模型缓存（pyannote/其模型为可选）
