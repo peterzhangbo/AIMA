@@ -228,17 +228,35 @@ final class PermissionsModel {
     }
 
     /// 扫描 HuggingFace 缓存：~/.cache/huggingface/hub/models--{org}--{name}/snapshots/*
+    /// HF 缓存用符号链接：snapshots/<sha>/* → ../../blobs/<sha256>。
+    /// 用户清理 blobs/ 后符号链接断掉但仍存在；只判断"有没有文件"会误报为已下载。
+    /// 这里 realpath 解析符号链接，累加目标文件实际大小，必须超过最低阈值才认为完整。
     private static func modelCached(_ hfId: String) async -> Bool {
         await Task.detached(priority: .utility) {
-            let home = FileManager.default.homeDirectoryForCurrentUser
+            let fm = FileManager.default
+            let home = fm.homeDirectoryForCurrentUser
             let folder = "models--" + hfId.replacingOccurrences(of: "/", with: "--")
             let snapshots = home.appendingPathComponent(".cache/huggingface/hub/\(folder)/snapshots")
-            guard let entries = try? FileManager.default.contentsOfDirectory(atPath: snapshots.path),
-                  !entries.isEmpty else { return false }
-            for e in entries {
-                let inside = snapshots.appendingPathComponent(e)
-                if let files = try? FileManager.default.contentsOfDirectory(atPath: inside.path),
-                   !files.isEmpty { return true }
+            guard let snaps = try? fm.contentsOfDirectory(atPath: snapshots.path),
+                  !snaps.isEmpty else { return false }
+            // 阈值 10 MB：覆盖 pyannote community-1（~50MB），同时拒绝只剩 config/tokenizer 等空壳。
+            let minBytes: Int64 = 10_000_000
+            for snap in snaps {
+                let snapDir = snapshots.appendingPathComponent(snap)
+                guard let files = try? fm.contentsOfDirectory(atPath: snapDir.path) else { continue }
+                var totalBytes: Int64 = 0
+                for f in files {
+                    let path = snapDir.appendingPathComponent(f).path
+                    // realpath 解析所有层符号链接；目标不存在（断链）返回 nil → 跳过
+                    var buf = [CChar](repeating: 0, count: Int(PATH_MAX))
+                    guard realpath(path, &buf) != nil else { continue }
+                    let resolved = String(cString: buf)
+                    guard let attrs = try? fm.attributesOfItem(atPath: resolved),
+                          let size = (attrs[.size] as? NSNumber)?.int64Value
+                    else { continue }
+                    totalBytes += size
+                    if totalBytes >= minBytes { return true }
+                }
             }
             return false
         }.value
