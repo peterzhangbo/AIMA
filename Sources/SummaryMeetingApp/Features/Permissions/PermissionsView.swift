@@ -224,23 +224,8 @@ final class PermissionsModel {
     private func shellCheckWithPath(names: [String], args: [String]) async -> (ok: Bool, path: String?) {
         await Task.detached(priority: .utility) {
             let fm = FileManager.default
-            // 1) 裸名走 ProcessRunner.augmentedPath（Python framework + Homebrew）
-            for name in names {
-                if (try? ProcessRunner.run(executable: name, arguments: args))?.succeeded == true {
-                    // 裸名命中时拿不到绝对路径，但能确认可用——继续往下解析路径，路径解析失败也不影响 ok=true
-                    if let resolved = Self.resolveExecutablePath(names: [name]) {
-                        return (true, resolved)
-                    }
-                    return (true, nil)
-                }
-            }
-            // 2) 直接查扩展兜底路径
-            if let path = Self.resolveExecutablePath(names: names) {
-                if (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
-                    return (true, path)
-                }
-            }
-            // 3) 用户登录 shell 兜底：加载 ~/.zshrc / ~/.zprofile，能拾取所有用户自配 PATH
+            // 1) 优先走用户登录 shell 的 PATH——最贴近他们 Terminal 实际能跑的二进制位置；
+            //    GUI 启动的 .app 自身环境变量被压缩了，这层最准。
             for name in names {
                 let cv = try? ProcessRunner.run(
                     executable: "/bin/zsh",
@@ -250,6 +235,21 @@ final class PermissionsModel {
                 let path = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !path.isEmpty, fm.isExecutableFile(atPath: path),
                    (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
+                    return (true, path)
+                }
+            }
+            // 2) 裸名走 ProcessRunner.augmentedPath（Python framework + Homebrew）
+            for name in names {
+                if (try? ProcessRunner.run(executable: name, arguments: args))?.succeeded == true {
+                    if let resolved = Self.resolveExecutablePath(names: [name]) {
+                        return (true, resolved)
+                    }
+                    return (true, nil)
+                }
+            }
+            // 3) 兜底扩展绝对路径列表
+            if let path = Self.resolveExecutablePath(names: names) {
+                if (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
                     return (true, path)
                 }
             }
@@ -274,10 +274,6 @@ final class PermissionsModel {
             "/Library/Frameworks/Python.framework/Versions/3.11/bin",
             // 用户级
             "\(home)/.local/bin",
-            // pip3 install --user 安装的 CLI 落点（hf 等）
-            "\(home)/Library/Python/3.13/bin",
-            "\(home)/Library/Python/3.12/bin",
-            "\(home)/Library/Python/3.11/bin",
             "\(home)/.pyenv/shims",
             "\(home)/.asdf/shims",
             "\(home)/.local/share/mise/shims",
@@ -293,6 +289,14 @@ final class PermissionsModel {
         for n in names {
             dirs.append("/opt/homebrew/opt/\(n)/bin")
             dirs.append("/usr/local/opt/\(n)/bin")
+        }
+        // pip3 install --user 装的 CLI 会落到 ~/Library/Python/<version>/bin。
+        // 用 glob 扫描该目录下所有 Python 版本，避免硬编码 3.11/3.12/3.13。
+        let userPyRoot = "\(home)/Library/Python"
+        if let entries = try? fm.contentsOfDirectory(atPath: userPyRoot) {
+            for entry in entries {
+                dirs.append("\(userPyRoot)/\(entry)/bin")
+            }
         }
         for dir in dirs {
             for name in names {
@@ -660,24 +664,26 @@ struct PermissionsView: View {
             // Homebrew Python 自 PEP 668 起对 system pip 装包加锁；统一用 --break-system-packages --user
             // 装到用户级 site-packages（~/Library/Python/3.x/lib/python/site-packages 与 .../bin），
             // 既不污染系统也不需要 venv，python3 import 默认能找到。
+            // 用 `python3 -m pip` 而非 `pip3`，确保 pip 与 .app 调用的 python3 同一个解释器，
+            // 避免 pip3 装到 A、app 用 B 的 user-site 而 import 失败。
             .init(id: "huggingface-cli", name: "huggingface-cli",
                   hint: model.hfCliEffectivelyRequired
                         ? "下载 Whisper / Gemma / pyannote 模型（需先完成 python3）"
                         : "已不再需要（必需模型已下载完成）",
-                  command: "pip3 install --break-system-packages --user -U \"huggingface_hub[cli]\"",
+                  command: "python3 -m pip install --break-system-packages --user -U \"huggingface_hub[cli]\"",
                   optional: !model.hfCliEffectivelyRequired,
                   result: model.hfCli, isBlocked: !pyOK),
             .init(id: "mlx_whisper", name: "mlx_whisper",
                   hint: "语音转文字（必需，需先完成 python3）",
-                  command: "pip3 install --break-system-packages --user mlx-whisper",
+                  command: "python3 -m pip install --break-system-packages --user mlx-whisper",
                   optional: false, result: model.mlxWhisper, isBlocked: !pyOK),
             .init(id: "mlx_vlm", name: "mlx_vlm",
                   hint: "纪要生成（必需，需先完成 python3）",
-                  command: "pip3 install --break-system-packages --user mlx-vlm",
+                  command: "python3 -m pip install --break-system-packages --user mlx-vlm",
                   optional: false, result: model.mlxVlm, isBlocked: !pyOK),
             .init(id: "pyannote.audio", name: "pyannote.audio",
                   hint: "说话人识别（可选，需先完成 python3）",
-                  command: "pip3 install --break-system-packages --user pyannote.audio",
+                  command: "python3 -m pip install --break-system-packages --user pyannote.audio",
                   optional: true, result: model.pyannote, isBlocked: !pyOK)
         ]
     }
