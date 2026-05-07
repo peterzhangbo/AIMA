@@ -19,6 +19,8 @@ final class PermissionsModel {
 
     struct DepResult: Equatable {
         var state: State = .pending
+        /// 解析到的可执行文件绝对路径（state==.ok 时）；UI 显示用于诊断
+        var resolvedPath: String? = nil
         enum State: Equatable { case pending, ok, missing }
     }
 
@@ -147,47 +149,54 @@ final class PermissionsModel {
         checkingDeps = true
         defer { checkingDeps = false }
 
-        // 依赖工具
-        async let rBrew  = shellCheck("brew",    args: ["--version"])
-        async let r0     = shellCheck("python3", args: ["--version"])
-        async let r1     = shellCheck("ffmpeg",  args: ["-version"])
-        async let rHf    = shellCheck("huggingface-cli", args: ["--help"])
-        async let r2     = pythonImport("mlx_whisper")
-        async let r3     = pythonImport("mlx_vlm")
-        async let r4     = pythonImport("pyannote.audio")
+        // 依赖工具：先并行解析二进制（含路径），再用解析到的 python3 跑 pythonImport，
+        // 这样即便对方 python3 在 pyenv/conda/asdf 的 shims，import 检测也能命中正确的解释器。
+        async let rBrew  = shellCheckWithPath(names: ["brew"], args: ["--version"])
+        async let r0     = shellCheckWithPath(names: ["python3", "python"], args: ["--version"])
+        async let r1     = shellCheckWithPath(names: ["ffmpeg"], args: ["-version"])
+        // huggingface_hub 0.32+ 把 huggingface-cli 重命名为 hf，两者都接受
+        async let rHf    = shellCheckWithPath(names: ["huggingface-cli", "hf"], args: ["--help"])
+
+        let (vBrew, v0, v1, vHf) = await (rBrew, r0, r1, rHf)
+
+        // python import 使用解析到的 python3 绝对路径（pyenv/conda 路径下 bare 名找不到时关键）
+        let pyExe = v0.path ?? "python3"
+        async let r2 = pythonImport("mlx_whisper",   python: pyExe)
+        async let r3 = pythonImport("mlx_vlm",       python: pyExe)
+        async let r4 = pythonImport("pyannote.audio", python: pyExe)
 
         // 模型缓存（文件系统扫描，快）
         async let m0 = Self.modelCached(currentWhisperID)
         async let m1 = Self.modelCached(currentGemmaID)
         async let m2 = Self.modelCached(currentPyannoteID)
 
-        let (vBrew, v0, v1, vHf, v2, v3, v4) = await (rBrew, r0, r1, rHf, r2, r3, r4)
+        let (v2, v3, v4) = await (r2, r3, r4)
         let (w, g, p) = await (m0, m1, m2)
-        brew       = resolved(name: "brew",           ok: vBrew)
-        python3    = resolved(name: "python3",        ok: v0)
-        ffmpeg     = resolved(name: "ffmpeg",         ok: v1)
-        hfCli      = resolved(name: "huggingface-cli", ok: vHf)
-        mlxWhisper = resolved(name: "mlx_whisper",    ok: v2)
-        mlxVlm     = resolved(name: "mlx_vlm",        ok: v3)
-        pyannote   = resolved(name: "pyannote.audio", ok: v4)
+        brew       = resolved(name: "brew",            ok: vBrew.ok, path: vBrew.path)
+        python3    = resolved(name: "python3",         ok: v0.ok,    path: v0.path)
+        ffmpeg     = resolved(name: "ffmpeg",          ok: v1.ok,    path: v1.path)
+        hfCli      = resolved(name: "huggingface-cli", ok: vHf.ok,   path: vHf.path)
+        mlxWhisper = resolved(name: "mlx_whisper",     ok: v2)
+        mlxVlm     = resolved(name: "mlx_vlm",         ok: v3)
+        pyannote   = resolved(name: "pyannote.audio",  ok: v4)
         whisperModel  = resolved(name: "whisper_model",  ok: w)
         gemmaModel    = resolved(name: "gemma_model",    ok: g)
         pyannoteModel = resolved(name: "pyannote_model", ok: p)
     }
 
     /// DEBUG 构建下支持通过 `SM_FAKE_MISSING=ffmpeg,mlx_whisper,whisper_model,all` 伪造缺失。
-    private func resolved(name: String, ok: Bool) -> DepResult {
+    private func resolved(name: String, ok: Bool, path: String? = nil) -> DepResult {
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["SM_FAKE_MISSING"], !raw.isEmpty {
             let set = Set(raw.split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces).lowercased()
             })
             if set.contains("all") || set.contains(name.lowercased()) {
-                return .init(state: .missing)
+                return .init(state: .missing, resolvedPath: nil)
             }
         }
         #endif
-        return .init(state: ok ? .ok : .missing)
+        return .init(state: ok ? .ok : .missing, resolvedPath: ok ? path : nil)
     }
 
     /// 扫描 HuggingFace 缓存：~/.cache/huggingface/hub/models--{org}--{name}/snapshots/*
@@ -209,29 +218,91 @@ final class PermissionsModel {
 
     // MARK: Private helpers
 
-    private func shellCheck(_ exe: String, args: [String]) async -> Bool {
+    /// 尝试从一组候选名解析出可用二进制的绝对路径，并跑 `args` 验证可调用。
+    /// 三层兜底覆盖 Homebrew / MacPorts / pyenv / conda / asdf / mise / ~/.local/bin 等常见安装位置，
+    /// 最后还会用 `/bin/zsh -ilc 'command -v ...'` 加载用户自己的 shell rc 当兜底。
+    private func shellCheckWithPath(names: [String], args: [String]) async -> (ok: Bool, path: String?) {
         await Task.detached(priority: .utility) {
-            // GUI 启动的 App PATH 往往缺 Homebrew 目录，先按裸名试，再回退到常见绝对路径
-            if (try? ProcessRunner.run(executable: exe, arguments: args))?.succeeded == true {
-                return true
-            }
-            let candidates = [
-                "/opt/homebrew/bin/\(exe)",
-                "/usr/local/bin/\(exe)",
-                "/opt/homebrew/opt/\(exe)/bin/\(exe)"
-            ]
-            for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
-                if (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
-                    return true
+            let fm = FileManager.default
+            // 1) 裸名走 ProcessRunner.augmentedPath（Python framework + Homebrew）
+            for name in names {
+                if (try? ProcessRunner.run(executable: name, arguments: args))?.succeeded == true {
+                    // 裸名命中时拿不到绝对路径，但能确认可用——继续往下解析路径，路径解析失败也不影响 ok=true
+                    if let resolved = Self.resolveExecutablePath(names: [name]) {
+                        return (true, resolved)
+                    }
+                    return (true, nil)
                 }
             }
-            return false
+            // 2) 直接查扩展兜底路径
+            if let path = Self.resolveExecutablePath(names: names) {
+                if (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
+                    return (true, path)
+                }
+            }
+            // 3) 用户登录 shell 兜底：加载 ~/.zshrc / ~/.zprofile，能拾取所有用户自配 PATH
+            for name in names {
+                let cv = try? ProcessRunner.run(
+                    executable: "/bin/zsh",
+                    arguments: ["-ilc", "command -v \(name)"]
+                )
+                guard let r = cv, r.succeeded else { continue }
+                let path = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !path.isEmpty, fm.isExecutableFile(atPath: path),
+                   (try? ProcessRunner.run(executable: path, arguments: args))?.succeeded == true {
+                    return (true, path)
+                }
+            }
+            return (false, nil)
         }.value
     }
 
-    private func pythonImport(_ module: String) async -> Bool {
+    /// 在常见绝对路径里搜索可执行文件（不实际运行）。命中即返回。
+    /// nonisolated 让 Task.detached 里的后台线程也能调到。
+    nonisolated private static func resolveExecutablePath(names: [String]) -> String? {
+        let fm = FileManager.default
+        let home = NSString("~").expandingTildeInPath
+        var dirs: [String] = [
+            // Homebrew
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            // MacPorts
+            "/opt/local/bin",
+            // python.org installer
+            "/Library/Frameworks/Python.framework/Versions/3.13/bin",
+            "/Library/Frameworks/Python.framework/Versions/3.12/bin",
+            "/Library/Frameworks/Python.framework/Versions/3.11/bin",
+            // 用户级
+            "\(home)/.local/bin",
+            "\(home)/.pyenv/shims",
+            "\(home)/.asdf/shims",
+            "\(home)/.local/share/mise/shims",
+            "\(home)/miniconda3/bin",
+            "\(home)/anaconda3/bin",
+            "\(home)/mambaforge/bin",
+            "\(home)/miniforge3/bin",
+            // Apple system
+            "/usr/bin",
+            "/bin"
+        ]
+        // 也尝试 Homebrew Cellar 里的 keg-only 工具：/opt/homebrew/opt/<name>/bin
+        for n in names {
+            dirs.append("/opt/homebrew/opt/\(n)/bin")
+            dirs.append("/usr/local/opt/\(n)/bin")
+        }
+        for dir in dirs {
+            for name in names {
+                let candidate = "\(dir)/\(name)"
+                if fm.isExecutableFile(atPath: candidate) { return candidate }
+            }
+        }
+        return nil
+    }
+
+    /// 用解析到的 python3（必要时）测试 import。
+    private func pythonImport(_ module: String, python: String = "python3") async -> Bool {
         await Task.detached(priority: .utility) {
-            (try? ProcessRunner.run(executable: "python3",
+            (try? ProcessRunner.run(executable: python,
                                    arguments: ["-c", "import \(module)"]))?.succeeded == true
         }.value
     }
@@ -508,6 +579,14 @@ struct PermissionsView: View {
                     }
                 }
                 Text(hint).font(.caption).foregroundStyle(.secondary)
+                if result.state == .ok, let p = result.resolvedPath {
+                    Text(p)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
                 if result.state != .ok {
                     HStack(spacing: 6) {
                         Text(fix)
