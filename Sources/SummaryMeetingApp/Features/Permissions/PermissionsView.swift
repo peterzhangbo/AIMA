@@ -406,8 +406,27 @@ struct PermissionsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-            Text("权限检查")
-                .font(.largeTitle.bold())
+            HStack(alignment: .firstTextBaseline) {
+                Text("权限检查")
+                    .font(.largeTitle.bold())
+                Spacer()
+                if model.checkingDeps {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button {
+                        Task {
+                            // 重新跑全套检查：屏幕录制 + 工具/模型/网络可达性
+                            async let s: Void = model.probeScreen()
+                            async let d: Void = model.checkDeps()
+                            _ = await (s, d)
+                        }
+                    } label: {
+                        Label("重新检查", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
             Text("需要开启系统权限并确认开发工具就绪，才能完整使用 AIMA（会议助手）。")
                 .foregroundStyle(.secondary)
 
@@ -435,15 +454,6 @@ struct PermissionsView: View {
 
             // ── 工具依赖 ──────────────────────────────────────
             CollapsibleSection(title: "工具依赖", allOK: model.requiredDepsOK) {
-                if model.checkingDeps {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    Button("重新检查") { Task { await model.checkDeps() } }
-                        .font(.caption)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-                }
-            } content: {
                 VStack(spacing: 8) {
                     // 按顺序的"下一步"指引（有依赖关系：python3/ffmpeg → pip 包）
                     if let step = nextInstallStep { installGuideCard(step) }
