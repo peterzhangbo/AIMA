@@ -140,6 +140,16 @@ struct MenuBarPanel: View {
 
             Spacer()
 
+            // 排错入口：把 ~/Library/Logs/AIMA 在 Finder 里展开，方便用户把日志发给我们。
+            Button {
+                LogCapture.revealLogsInFinder()
+            } label: {
+                Image(systemName: "doc.text.magnifyingglass")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("打开日志文件夹")
+
             Text("\(history.meetings.count) 条记录")
                 .font(.caption)
                 .foregroundStyle(.tertiary)

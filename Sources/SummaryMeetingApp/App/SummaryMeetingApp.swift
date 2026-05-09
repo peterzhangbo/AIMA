@@ -5,6 +5,12 @@ import AppKit
 struct SummaryMeetingApp: App {
     @State private var appState = AppState()
 
+    init() {
+        // 一旦 App 起来就把 stderr/stdout 落盘到 ~/Library/Logs/AIMA/，
+        // 公证包（无终端）的崩溃 / 麦克风 / Whisper / Gemma 错误才有据可查。
+        LogCapture.install()
+    }
+
     var body: some Scene {
         // 单例主窗口：openWindow(id:) 只唤起现有窗口，不会重复创建。
         Window("会议助手", id: "main") {

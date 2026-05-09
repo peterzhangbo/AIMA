@@ -98,8 +98,9 @@ public final class RecordingCoordinator {
             try mic.start(to: paths.micWav)
         } catch {
             let reason = "麦克风启动失败: \(error.localizedDescription)"
+            // 落盘到日志，方便外发排查
+            FileHandle.standardError.write(Data("[MicRecorder] \(reason)\n".utf8))
             self.state = .failed(message: reason)
-            // 把刚插入的 recording 行标记为 failed，避免历史侧栏出现永久"录制中"幽灵行
             markFailed(meetingID: id, reason: reason)
             return
         }
@@ -705,6 +706,8 @@ public final class RecordingCoordinator {
     }
 
     private func markFailed(meetingID: MeetingID, reason: String) {
+        // 写到 stderr，被 LogCapture 捕获到 ~/Library/Logs/AIMA/aima-*.log
+        FileHandle.standardError.write(Data("[RecordingCoordinator] meeting \(meetingID.raw) failed: \(reason)\n".utf8))
         if var m = try? store.meeting(id: meetingID) {
             m.status = .failed
             m.failureReason = reason
