@@ -854,9 +854,13 @@ struct PermissionsView: View {
                   hint: "\(gemmaID)（\(model.recommendedGemma.size)，\(model.recommendedGemma.note)）",
                   command: "\(prefix)hf download \(gemmaID)",
                   optional: false, result: model.gemmaModel, isBlocked: hfBlocked),
+            // pyannote/speaker-diarization-community-1 是 gated 模型，需要先登录 HF token：
+            // 1) huggingface.co/settings/tokens 生成 read 权限的 token
+            // 2) 在模型页 huggingface.co/pyannote/speaker-diarization-community-1 接受协议
+            // 3) `hf auth login` 把 token 存到 ~/.cache/huggingface/token，之后 hf download 自动带 token。
             .init(id: "model.pyannote", name: "pyannote 模型",
-                  hint: "\(pyID)（说话人分离，可选）",
-                  command: "\(prefix)hf download \(pyID)",
+                  hint: "\(pyID)（说话人分离，可选；门控模型，首次需 hf auth login）",
+                  command: "hf auth login && \(prefix)hf download \(pyID)",
                   optional: true, result: model.pyannoteModel, isBlocked: hfBlocked)
         ]
     }
