@@ -9,6 +9,9 @@ struct SummaryMeetingApp: App {
         // 一旦 App 起来就把 stderr/stdout 落盘到 ~/Library/Logs/AIMA/，
         // 公证包（无终端）的崩溃 / 麦克风 / Whisper / Gemma 错误才有据可查。
         LogCapture.install()
+        // 抓用户登录 shell 的 PATH，让 ffmpeg / python3 / hf 等子进程能在
+        // Homebrew/MacPorts/conda/pyenv/asdf 等任意路径下找到。
+        ProcessRunner.captureUserShellPath()
     }
 
     var body: some Scene {
