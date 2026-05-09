@@ -4,14 +4,23 @@ import CryptoKit
 public enum GemmaRunner {
     /// 按硬件档位（RAM）选模型。和 PermissionsModel.recommendedGemma 必须保持同步：
     /// 安装命令、检测、运行时三处都用同一档对应的 ID。
-    /// - <16GB:  gemma-4-e4b-it-4bit (~3GB)
+    /// - <12GB:  gemma-4-e2b-it-4bit  (~1.5-2GB)  极小内存兜底，纪要质量明显弱
+    /// - 12-16GB: gemma-4-e4b-it-4bit (~3GB)
     /// - 16-32GB: gemma-4-26b-a4b-it-4bit (~15-18GB)
     /// - ≥32GB:  gemma-4-31b-it-4bit (~18-22GB)
     public static var model: String {
         let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
         if ramGB >= 32 { return "mlx-community/gemma-4-31b-it-4bit" }
         if ramGB >= 16 { return "mlx-community/gemma-4-26b-a4b-it-4bit" }
-        return "mlx-community/gemma-4-e4b-it-4bit"
+        if ramGB >= 12 { return "mlx-community/gemma-4-e4b-it-4bit" }
+        return "mlx-community/gemma-4-e2b-it-4bit"
+    }
+
+    /// 按 RAM 给推理 max-tokens 设上限：极小内存（<12GB）下 KV cache 也是 OOM 主因之一，
+    /// 这里把上限砍半，牺牲长度换稳定。
+    public static var defaultMaxTokens: Int {
+        let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+        return ramGB >= 12 ? 8192 : 4096
     }
 
     /// 按 docs/01_environment_baseline.md 固定命令调用 mlx_vlm generate。
@@ -76,12 +85,14 @@ public enum GemmaRunner {
         maxTokens: Int = 8192,
         logTo: URL? = nil
     ) throws -> String {
+        // 把任何调用方传入的 maxTokens 按 defaultMaxTokens 截断——8GB 机器上 KV cache 太大会 OOM。
+        let capped = min(maxTokens, defaultMaxTokens)
         let result = try ProcessRunner.run(
             executable: "python3",
             arguments: [
                 "-m", "mlx_vlm", "generate",
                 "--model", model,
-                "--max-tokens", String(maxTokens),
+                "--max-tokens", String(capped),
                 "--temperature", "0.0",
                 "--prompt", prompt
             ],

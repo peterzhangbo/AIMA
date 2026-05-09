@@ -68,17 +68,19 @@ final class PermissionsModel {
         let ramGB: Double
         let isAppleSilicon: Bool
 
-        enum Tier: String { case low, mid, high }
+        enum Tier: String { case ultraLow, low, mid, high }
         var tier: Tier {
             if ramGB >= 32 { return .high }
             if ramGB >= 16 { return .mid }
-            return .low
+            if ramGB >= 12 { return .low }
+            return .ultraLow
         }
         var tierLabel: String {
             switch tier {
-            case .low:  return "入门（<16GB）"
-            case .mid:  return "标准（16-32GB）"
-            case .high: return "高配（≥32GB）"
+            case .ultraLow: return "极低配（<12GB，OOM 风险高）"
+            case .low:      return "入门（12-16GB）"
+            case .mid:      return "标准（16-32GB）"
+            case .high:     return "高配（≥32GB）"
             }
         }
     }
@@ -147,9 +149,10 @@ final class PermissionsModel {
     }
     var recommendedGemma: ModelSpec {
         switch hardware.tier {
-        case .low:  return .init(id: "mlx-community/gemma-4-e4b-it-4bit",     size: "~3GB",     note: "Gemma 4 Any-to-Any 轻量版（~8B 总），小内存可用")
-        case .mid:  return .init(id: "mlx-community/gemma-4-26b-a4b-it-4bit", size: "~15-18GB", note: "当前默认；MoE 架构，26B 总 / 4B 激活，速度接近 4B、质量接近稠密 26B")
-        case .high: return .init(id: "mlx-community/gemma-4-31b-it-4bit",     size: "~18-22GB", note: "Gemma 4 稠密 31B，质量最佳（需 ≥32GB 统一内存）")
+        case .ultraLow: return .init(id: "mlx-community/gemma-4-e2b-it-4bit",     size: "~1.5-2GB", note: "Gemma 4 e2b（最小档），8GB 内存勉强可跑；纪要质量明显弱于 e4b/26b")
+        case .low:      return .init(id: "mlx-community/gemma-4-e4b-it-4bit",     size: "~3GB",     note: "Gemma 4 Any-to-Any 轻量版（~8B 总），小内存可用")
+        case .mid:      return .init(id: "mlx-community/gemma-4-26b-a4b-it-4bit", size: "~15-18GB", note: "当前默认；MoE 架构，26B 总 / 4B 激活，速度接近 4B、质量接近稠密 26B")
+        case .high:     return .init(id: "mlx-community/gemma-4-31b-it-4bit",     size: "~18-22GB", note: "Gemma 4 稠密 31B，质量最佳（需 ≥32GB 统一内存）")
         }
     }
     /// 当前运行时使用的模型 id（和 Runner 中的常量对应）
