@@ -159,9 +159,13 @@ public final class RecordingCoordinator {
         let degraded = self.systemAudioDegraded
 
         // 混音（快速落盘；失败直接终结此会议，不进入队列）
+        // mic.outputURL 可能是 .wav（正常）或 .m4a（AVAudioRecorder 格式降级后的回退）
+        let micAudioURL: URL? = mic.outputURL.flatMap {
+            FileManager.default.fileExists(atPath: $0.path) ? $0 : nil
+        }
         do {
             try AudioMixer.mix(
-                mic: FileManager.default.fileExists(atPath: paths.micWav.path) ? paths.micWav : nil,
+                mic: micAudioURL,
                 system: (!degraded && FileManager.default.fileExists(atPath: paths.systemAudio.path)) ? paths.systemAudio : nil,
                 output: paths.mixedWav,
                 logTo: paths.logFile
