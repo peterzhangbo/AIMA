@@ -166,7 +166,28 @@ final class PermissionsModel {
     // MARK: Actions
 
     func requestMic() async {
-        micGranted = await MicRecorder.requestPermission()
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        switch status {
+        case .authorized:
+            micGranted = true
+        case .notDetermined:
+            micGranted = await MicRecorder.requestPermission()
+        case .denied, .restricted:
+            // 已拒绝：requestAccess 不会弹框，必须跳转系统设置
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        @unknown default:
+            micGranted = await MicRecorder.requestPermission()
+        }
+    }
+
+    /// 按钮标签：denied 时改为"去系统设置"
+    var micActionLabel: String {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .denied, .restricted: return "去系统设置"
+        default: return "请求权限"
+        }
     }
 
     func probeScreen() async {
@@ -451,7 +472,7 @@ struct PermissionsView: View {
                         ok: model.micGranted,
                         hint: "用于录制你自己的声音",
                         action: { Task { await model.requestMic() } },
-                        actionLabel: "请求权限"
+                        actionLabel: model.micActionLabel
                     )
                     permRow(
                         title: "屏幕录制（含系统音频）",
