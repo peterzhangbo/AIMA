@@ -236,7 +236,8 @@ final class PermissionsModel {
     /// 扫描 HuggingFace 缓存：~/.cache/huggingface/hub/models--{org}--{name}/snapshots/*
     /// HF 缓存用符号链接：snapshots/<sha>/* → ../../blobs/<sha256>。
     /// 用户清理 blobs/ 后符号链接断掉但仍存在；只判断"有没有文件"会误报为已下载。
-    /// 这里 realpath 解析符号链接，累加目标文件实际大小，必须超过最低阈值才认为完整。
+    /// 这里递归遍历整个 snapshot 树（pyannote 等 pipeline 模型在子目录里放权重），
+    /// realpath 解析符号链接，累加目标文件实际大小，必须超过最低阈值才认为完整。
     private static func modelCached(_ hfId: String) async -> Bool {
         await Task.detached(priority: .utility) {
             let fm = FileManager.default
@@ -245,19 +246,24 @@ final class PermissionsModel {
             let snapshots = home.appendingPathComponent(".cache/huggingface/hub/\(folder)/snapshots")
             guard let snaps = try? fm.contentsOfDirectory(atPath: snapshots.path),
                   !snaps.isEmpty else { return false }
-            // 阈值 10 MB：覆盖 pyannote community-1（~50MB），同时拒绝只剩 config/tokenizer 等空壳。
+            // 阈值 10 MB：覆盖 pyannote community-1（~30-50MB），同时拒绝只剩 config/tokenizer 等空壳。
             let minBytes: Int64 = 10_000_000
             for snap in snaps {
                 let snapDir = snapshots.appendingPathComponent(snap)
-                guard let files = try? fm.contentsOfDirectory(atPath: snapDir.path) else { continue }
+                // 递归枚举所有子文件（pyannote 模型在子目录里有 .bin/.ckpt 权重）
+                guard let enumerator = fm.enumerator(at: snapDir,
+                    includingPropertiesForKeys: [.isRegularFileKey],
+                    options: []) else { continue }
                 var totalBytes: Int64 = 0
-                for f in files {
-                    let path = snapDir.appendingPathComponent(f).path
+                for case let url as URL in enumerator {
                     // realpath 解析所有层符号链接；目标不存在（断链）返回 nil → 跳过
                     var buf = [CChar](repeating: 0, count: Int(PATH_MAX))
-                    guard realpath(path, &buf) != nil else { continue }
+                    guard realpath(url.path, &buf) != nil else { continue }
                     let resolved = String(cString: buf)
-                    guard let attrs = try? fm.attributesOfItem(atPath: resolved),
+                    var isDir: ObjCBool = false
+                    guard fm.fileExists(atPath: resolved, isDirectory: &isDir),
+                          !isDir.boolValue,
+                          let attrs = try? fm.attributesOfItem(atPath: resolved),
                           let size = (attrs[.size] as? NSNumber)?.int64Value
                     else { continue }
                     totalBytes += size
@@ -861,9 +867,10 @@ struct PermissionsView: View {
             // 1) huggingface.co/settings/tokens 生成 read 权限的 token
             // 2) 在模型页 huggingface.co/pyannote/speaker-diarization-community-1 接受协议
             // 3) `hf auth login` 把 token 存到 ~/.cache/huggingface/token，之后 hf download 自动带 token。
+            // hf auth login 也会访问 hf.co（验证 token），所以同样要带镜像前缀。
             .init(id: "model.pyannote", name: "pyannote 模型",
                   hint: "\(pyID)（说话人分离，可选；门控模型，首次需 hf auth login）",
-                  command: "hf auth login && \(prefix)hf download \(pyID)",
+                  command: "\(prefix)hf auth login && \(prefix)hf download \(pyID)",
                   optional: true, result: model.pyannoteModel, isBlocked: hfBlocked)
         ]
     }
