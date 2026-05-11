@@ -34,25 +34,24 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+
+          # -T /usr/bin/codesign: 授权 codesign 访问私钥（无弹窗）
           security import "$CERT_PATH" \
             -k "$KEYCHAIN_PATH" \
             -P "$CERTIFICATE_PWD" \
-            -T /usr/bin/codesign \
-            -T /usr/bin/security \
-            -T /usr/bin/productbuild
+            -T /usr/bin/codesign
 
-          # 把新 keychain 加到搜索列表前面，保留原有 keychain（不替换）
-          security list-keychain -d user -s \
-            "$KEYCHAIN_PATH" \
-            ~/Library/Keychains/login.keychain-db
-
-          # 允许 codesign 无弹窗访问私钥
+          # 关键：设置分区访问列表，让 Apple 工具链可以无提示使用私钥
           security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PWD" \
+            "$KEYCHAIN_PATH"
 
-          # 验证：在所有 keychain 里能找到证书
-          security find-identity -v -p codesigning
+          # 加入系统 keychain 搜索列表
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # 打印找到的证书（验证导入成功）
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       # ── 4. 存储公证凭据 ───────────────────────────────────────────
       - name: Store notarytool credentials
