@@ -87,7 +87,7 @@ ENT
 # 持续给 bundle 添加 com.apple.FinderInfo / fileprovider.fpfs#P xattr 导致 codesign 失败。
 WORK_DIR="$(mktemp -d)/release"
 mkdir -p "$WORK_DIR"
-echo "→ 将 .app 复制到 $WORK_DIR（绕过 iCloud Drive xattr）"
+echo "-> copy .app to workdir: $WORK_DIR"
 # ditto -X 显式跳过扩展属性 / ACL
 /usr/bin/ditto --noextattr --noqtn "$APP_DIR" "$WORK_DIR/$PRODUCT_NAME.app"
 # 兜底再清一次
@@ -98,7 +98,7 @@ WORK_APP="$WORK_DIR/$PRODUCT_NAME.app"
 SIGN_ID="${SIGN_ID:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 if [ -n "$SIGN_ID" ]; then
-    echo "→ 签名（Developer ID: $SIGN_ID）"
+    echo "-> sign: $SIGN_ID"
     # 公证要求：hardened runtime + secure timestamp
     codesign --force --deep --sign "$SIGN_ID" \
              --entitlements "$ENTITLEMENTS" \
@@ -124,7 +124,7 @@ if [ -n "$NOTARY_PROFILE" ]; then
     # 用 ditto 打包以保留签名所需的属性（推荐做法）
     /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$WORK_APP" "$NOTARY_ZIP"
 
-    echo "→ 提交公证（profile: $NOTARY_PROFILE）— 这一步通常 1-3 分钟"
+    echo "-> notarize (profile: $NOTARY_PROFILE)"
     if ! xcrun notarytool submit "$NOTARY_ZIP" \
              --keychain-profile "$NOTARY_PROFILE" \
              --wait; then
