@@ -191,7 +191,7 @@ final class PermissionsModel {
     }
 
     /// silent=true：仅检查当前状态，不触发系统弹窗（用于 View 出现时的静默探测）。
-    /// silent=false：主动请求权限，会弹出系统授权窗口，并把 App 注册进 TCC 列表。
+    /// silent=false：调用 SCK API 把 App 注册进 TCC 列表，然后若未授权直接打开系统设置。
     func probeScreen(silent: Bool = false) async {
         checking = true
         defer { checking = false }
@@ -199,6 +199,11 @@ final class PermissionsModel {
             screenGranted = SystemAudioRecorder.hasPermission()
         } else {
             screenGranted = await SystemAudioRecorder.requestPermissionPrompt()
+            // 注册完成后若仍未授权，直接打开系统设置的录屏权限页——
+            // 此时 App 已出现在列表里，用户只需拨动开关即可。
+            if !screenGranted {
+                SystemAudioRecorder.openScreenCaptureSettings()
+            }
         }
     }
 
@@ -483,9 +488,9 @@ struct PermissionsView: View {
                     permRow(
                         title: "屏幕录制（含系统音频）",
                         ok: model.screenGranted,
-                        hint: "用于采集会议对端声音。首次会弹出系统授权窗口。",
+                        hint: "用于采集会议对端声音。点击按钮后会自动打开系统设置。",
                         action: { Task { await model.probeScreen() } },
-                        actionLabel: model.checking ? "检查中…" : "检查/请求"
+                        actionLabel: model.checking ? "检查中…" : (model.screenGranted ? "已授权" : "请求并打开设置")
                     )
                 }
             }

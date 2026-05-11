@@ -277,27 +277,26 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
 
     // MARK: - Permission probe
 
-    /// 触发屏幕录制权限请求。
-    /// 必须先调 CGRequestScreenCaptureAccess()，它会把 App 注册进 TCC 列表，
-    /// 用户才能在「系统设置 → 隐私与安全 → 屏幕录制」里看到并手动开启。
-    /// 仅调 SCShareableContent 在被拒时会直接 throw，TCC 不会记录该 App，
-    /// 导致系统设置列表里永远找不到它。
+    /// 触发 ScreenCaptureKit TCC 注册。
+    /// 调用 SCShareableContent 是让 App 出现在「系统设置 → 录屏与系统录音」列表的
+    /// 唯一可靠方式；即使 throw（未授权），注册副作用依然生效。
+    /// CGRequestScreenCaptureAccess 是 CGWindowList 旧 API，在 macOS 14/15 上
+    /// 不会把 App 写入 ScreenCaptureKit 专属的 TCC 列表，故不再使用。
+    @discardableResult
     public static func requestPermissionPrompt() async -> Bool {
-        // 1. 主动触发 TCC 弹窗 / 注册（同步，不阻塞 UI——系统会自行弹出对话框）
-        if CGRequestScreenCaptureAccess() {
-            return true
-        }
-        // 2. 用户拒绝或已在列表但未授权：再用 SCShareableContent 确认实际状态
-        do {
-            _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            return true
-        } catch {
-            return false
-        }
+        // SCShareableContent 调用失败时同样会把 App 写进 TCC 列表（这是副作用）
+        _ = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        return CGPreflightScreenCaptureAccess()
     }
 
     /// 仅检查当前权限状态，不触发弹窗（用于静默 probe）。
     public static func hasPermission() -> Bool {
         CGPreflightScreenCaptureAccess()
+    }
+
+    /// 打开系统设置的录屏权限页。
+    public static func openScreenCaptureSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+        NSWorkspace.shared.open(url)
     }
 }
