@@ -142,11 +142,14 @@ if [ -n "$NOTARY_PROFILE" ]; then
     rm -f "$NOTARY_ZIP"
 fi
 
-# 最终分发 zip：在 /tmp 里 ditto 打包（保留签名 + 票据），再把 zip 和 .app 都搬回 .build/release
+# 最终分发 zip：用 zip --symlinks 打包，避免 ditto 产生 __MACOSX 元数据目录
+# staple 票据已嵌入 app bundle，zip 能完整保留
 echo "→ 打包 $ZIP_NAME"
 TMP_ZIP="$WORK_DIR/$ZIP_NAME"
 rm -f "$TMP_ZIP"
-/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$WORK_APP" "$TMP_ZIP"
+cd "$WORK_DIR"
+zip -r --symlinks "$ZIP_NAME" "$(basename "$WORK_APP")"
+cd - > /dev/null
 
 echo "→ 回搬产物到 $BUILD_DIR/"
 rm -rf "$APP_DIR"
