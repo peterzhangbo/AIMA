@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreAudio
 import AudioToolbox
+import AppKit
 
 /// 麦克风录音器。
 /// 优先用 AVAudioEngine（installTap → AVAudioFile），完全绕开 AVAudioRecorder；
@@ -46,10 +47,7 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
         print("[MicRecorder] 可用输入设备：\(inputDevices.isEmpty ? "无" : inputDevices.joined(separator: ", "))")
         if inputDevices.isEmpty {
             throw NSError(domain: "MicRecorder", code: 13,
-                          userInfo: [NSLocalizedDescriptionKey:
-                            "未检测到麦克风设备。\n"
-                            + "请检查：系统设置 → 声音 → 输入，确认列表中有可用的输入设备。\n"
-                            + "如果你使用的是 Mac Mini / Mac Studio，需要连接外置麦克风。"])
+                          userInfo: [NSLocalizedDescriptionKey: MicRecorder.noDeviceMessage])
         }
 
         // ── 预检 3：目录可写 ──────────────────────────────────────────
@@ -177,6 +175,16 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
 
     public static var isAuthorized: Bool {
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    }
+
+    /// 无输入设备时的标准错误信息（RecordingView 用此字符串判断是否显示"打开声音设置"按钮）
+    public static let noDeviceMessage = "没有检测到麦克风"
+
+    /// 打开「系统设置 → 声音 → 输入」
+    public static func openSoundInputSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.sound?input") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     // MARK: - Private: AVAudioEngine

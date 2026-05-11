@@ -132,7 +132,11 @@ struct RecordingView: View {
         case .stopping:
             Text("停止中…").foregroundStyle(.secondary)
         case .failed(let message):
-            Text("失败：\(message)").foregroundStyle(.red).multilineTextAlignment(.center)
+            if message.contains(MicRecorder.noDeviceMessage) {
+                noMicCard
+            } else {
+                Text("失败：\(message)").foregroundStyle(.red).multilineTextAlignment(.center)
+            }
         }
     }
 
@@ -154,6 +158,52 @@ struct RecordingView: View {
             Text(label)
                 .foregroundStyle(stage == .failed ? Color.red : stage == .completed ? Color.green : .secondary)
         }
+    }
+
+    // MARK: - No Microphone Card
+
+    private var noMicCard: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "mic.slash.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 6) {
+                Text("未检测到麦克风")
+                    .font(.title2.bold())
+                Text("系统中没有可用的音频输入设备。\n请按以下步骤排查：")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("检查麦克风是否连接（USB / 3.5mm / 蓝牙）", systemImage: "1.circle.fill")
+                Label("MacBook：检查是否被静音或被其它 App 独占", systemImage: "2.circle.fill")
+                Label("Mac Mini / Studio：需连接外置麦克风", systemImage: "3.circle.fill")
+                Label("打开声音设置，确认「输入」列表不为空", systemImage: "4.circle.fill")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+
+            HStack(spacing: 12) {
+                Button {
+                    MicRecorder.openSoundInputSettings()
+                } label: {
+                    Label("打开声音设置", systemImage: "speaker.wave.2")
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    Task { await coordinator.start() }
+                } label: {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(24)
+        .background(.red.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     private func formatDuration(_ s: TimeInterval) -> String {
