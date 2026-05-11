@@ -143,20 +143,19 @@
       filter: blur(30px);
     }
 
-    /* Crossfade slides inside the single MacBook display */
+    /* Crossfade slides — grid-area stacks them in one cell */
     .slide {
-      position: absolute;
-      inset: 0;
+      grid-area: 1 / 1;
       opacity: 0;
       transition: opacity .55s ease;
       pointer-events: none;
-      overflow: hidden;
+      min-width: 0;
     }
     .slide.active {
       opacity: 1;
       pointer-events: auto;
     }
-    .slide img { width: 100%; display: block; }
+    .slide img { width: 100%; height: auto; display: block; }
 
     /* ══════════ MacBook frame ══════════ */
     .macbook {
@@ -206,15 +205,15 @@
       pointer-events: none; z-index: 3;
     }
 
-    /* Screen content — aspect-ratio anchors crossfade layer height */
+    /* Screen content — grid stacking lets image drive height naturally */
     .macbook-display {
-      /* Match macOS window corner radius so frame covers screenshot corners */
       border-radius: 10px;
       overflow: hidden;
       background: #000;
       position: relative; z-index: 1;
       line-height: 0;
-      aspect-ratio: 16/10;
+      /* All slides occupy the same cell; tallest (active) sets the height */
+      display: grid;
     }
     /* Inset corner overlay: draws the lid-colour concave corners over the display edge */
     .macbook-display::after {
@@ -708,7 +707,7 @@ Object.entries(shots).forEach(([id, src]) => {
     const el = document.getElementById(id);
     if (el) {
       el.innerHTML = '';
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      img.style.cssText = 'width:100%;height:auto;display:block;';
       el.appendChild(img);
     }
   };
