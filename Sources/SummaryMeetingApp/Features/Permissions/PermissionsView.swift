@@ -190,10 +190,16 @@ final class PermissionsModel {
         }
     }
 
-    func probeScreen() async {
+    /// silent=true：仅检查当前状态，不触发系统弹窗（用于 View 出现时的静默探测）。
+    /// silent=false：主动请求权限，会弹出系统授权窗口，并把 App 注册进 TCC 列表。
+    func probeScreen(silent: Bool = false) async {
         checking = true
         defer { checking = false }
-        screenGranted = await SystemAudioRecorder.requestPermissionPrompt()
+        if silent {
+            screenGranted = SystemAudioRecorder.hasPermission()
+        } else {
+            screenGranted = await SystemAudioRecorder.requestPermissionPrompt()
+        }
     }
 
     func checkDeps() async {
@@ -583,7 +589,7 @@ struct PermissionsView: View {
         }
         .frame(minWidth: 620, minHeight: 520)
         .task {
-            async let s: Void = model.probeScreen()
+            async let s: Void = model.probeScreen(silent: true)
             async let d: Void = model.checkDeps()
             _ = await (s, d)
         }
