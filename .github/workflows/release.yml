@@ -1,0 +1,75 @@
+name: Release
+
+# 推送形如 v0.1.23 的 tag 时触发
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-15        # Apple Silicon runner，支持 Swift 5.9+
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. 从 tag 提取版本号（去掉前缀 v）────────────────────────
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # ── 3. 导入 Developer ID 证书到临时钥匙串 ────────────────────
+      - name: Import certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PWD:    ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          KEYCHAIN_PWD=$(openssl rand -hex 16)
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo "$CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PWD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+
+      # ── 4. 存储公证凭据到钥匙串 ──────────────────────────────────
+      - name: Store notarytool credentials
+        env:
+          APPLE_ID:       ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID:  ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PWD:  ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials "AC_NOTARY" \
+            --apple-id    "$APPLE_ID" \
+            --team-id     "$APPLE_TEAM_ID" \
+            --password    "$APPLE_APP_PWD"
+
+      # ── 5. 构建 + 签名 + 公证 + 打包 ─────────────────────────────
+      - name: Build, sign & notarize
+        env:
+          VERSION:        ${{ steps.version.outputs.VERSION }}
+          SIGN_ID:        ${{ secrets.SIGN_ID }}
+          NOTARY_PROFILE: AC_NOTARY
+        run: |
+          bash scripts/build_release.sh
+
+      # ── 6. 创建 GitHub Release 并上传 zip ───────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AIMA v${{ steps.version.outputs.VERSION }}"
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}  # v1.0.0-beta → prerelease
+          generate_release_notes: true
+          files: .build/release/AIMA-${{ steps.version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

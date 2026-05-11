@@ -40,7 +40,7 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>${PRODUCT_NAME}</string>
   <key>CFBundleExecutable</key><string>${BIN_NAME}</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
-  <key>CFBundleIdentifier</key><string>com.saul.aima</string>
+  <key>CFBundleIdentifier</key><string>com.aima.app</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.23</string>
   <key>CFBundleVersion</key><string>23</string>

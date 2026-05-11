@@ -8,7 +8,7 @@
 
 ## 系统与解释器
 
-- 当前项目目录：`/Users/saul/Documents/Develop/meetingSummary`
+- 当前项目目录：`~/Documents/Develop/AIMA`
 - 当前可用 Python：`/usr/local/bin/python3`
 - 后续统一使用：`python3`
 - 不依赖 `python`
@@ -110,7 +110,7 @@ python3 -m mlx_vlm generate \
 ## 样例输入
 
 - 当前仓库样例音频：
-  `/Users/saul/Documents/Develop/meetingSummary/Impromptu.m4a`
+  `~/Documents/Develop/AIMA/Impromptu.m4a`
 
 该文件后续可用于端到端验证：
 
