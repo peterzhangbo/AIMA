@@ -68,8 +68,15 @@ jobs:
           name: "AIMA v${{ steps.version.outputs.VERSION }}"
           tag_name: ${{ github.ref_name }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}  # v1.0.0-beta → prerelease
-          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: false
+          body: |
+            ## 安装方式
+            1. 下载下方的 `AIMA-${{ steps.version.outputs.VERSION }}.zip`
+            2. 解压，将 `AIMA.app` 拖入 `/Applications`
+            3. 右键 → 打开（首次需通过 Gatekeeper）
+
+            **系统要求**：Apple Silicon · macOS 14+
           files: .build/release/AIMA-${{ steps.version.outputs.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
