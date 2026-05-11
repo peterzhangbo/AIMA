@@ -59,19 +59,17 @@
     /* ════════════ HERO ════════════ */
     .hero { position: relative; overflow: hidden; padding-top: 60px; }
 
-    /* Ambient background orbs */
+    /* Ambient background orbs — radial-gradient already has soft edge, no blur needed */
     .hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-    .orb {
-      position: absolute; border-radius: 50%; filter: blur(90px);
-    }
+    .orb { position: absolute; border-radius: 50%; }
     .orb-1 {
       width: 560px; height: 380px;
-      background: radial-gradient(ellipse, rgba(77,128,255,.14) 0%, transparent 70%);
+      background: radial-gradient(ellipse, rgba(77,128,255,.12) 0%, transparent 68%);
       top: 60px; left: 5%;
     }
     .orb-2 {
       width: 480px; height: 360px;
-      background: radial-gradient(ellipse, rgba(140,77,242,.12) 0%, transparent 70%);
+      background: radial-gradient(ellipse, rgba(140,77,242,.10) 0%, transparent 68%);
       top: 100px; right: 5%;
     }
 
@@ -129,18 +127,17 @@
     /* Right: carousel */
     .hero-carousel { position: relative; }
 
-    /* Soft glow behind the card */
+    /* Soft glow behind the card — radial-gradient handles the falloff, no blur needed */
     .carousel-glow {
       position: absolute; z-index: 0;
       width: 110%; height: 110%;
       top: -5%; left: -5%;
-      background: radial-gradient(ellipse at 50% 45%,
-        rgba(77,128,255,.13) 0%,
-        rgba(140,77,242,.08) 45%,
+      background: radial-gradient(ellipse at 50% 40%,
+        rgba(77,128,255,.11) 0%,
+        rgba(140,77,242,.06) 45%,
         transparent 70%);
       pointer-events: none;
       border-radius: 50%;
-      filter: blur(30px);
     }
 
     /* Crossfade slides — grid-area stacks them in one cell */
@@ -150,6 +147,7 @@
       transition: opacity .55s ease;
       pointer-events: none;
       min-width: 0;
+      will-change: opacity;
     }
     .slide.active {
       opacity: 1;
@@ -158,21 +156,10 @@
     .slide img { width: 100%; height: auto; display: block; }
 
     /* ══════════ MacBook frame ══════════ */
-    .macbook {
-      position: relative;
-      /* Composite shadow: depth + brand glow */
-      filter:
-        drop-shadow(0 36px 70px rgba(0,0,0,.72))
-        drop-shadow(0 6px 20px rgba(77,128,255,.13));
-      transition: filter .4s;
-    }
-    .macbook:hover {
-      filter:
-        drop-shadow(0 44px 85px rgba(0,0,0,.78))
-        drop-shadow(0 8px 28px rgba(77,128,255,.22));
-    }
+    /* Use box-shadow (GPU composited) instead of filter:drop-shadow (expensive offscreen buffer) */
+    .macbook { position: relative; }
 
-    /* Lid / screen body */
+    /* Lid / screen body — box-shadow here replaces the expensive filter:drop-shadow on .macbook */
     .macbook-lid {
       background: linear-gradient(165deg, #2e2e30 0%, #1b1b1d 100%);
       border-radius: 12px 12px 3px 3px;
@@ -181,6 +168,16 @@
       border: 1px solid rgba(255,255,255,.11);
       border-bottom-color: rgba(255,255,255,.04);
       box-shadow:
+        0 36px 70px rgba(0,0,0,.72),
+        0 6px 20px rgba(77,128,255,.13),
+        inset 0  1px 0 rgba(255,255,255,.07),
+        inset 0 -1px 0 rgba(0,0,0,.25);
+      transition: box-shadow .4s;
+    }
+    .macbook:hover .macbook-lid {
+      box-shadow:
+        0 44px 85px rgba(0,0,0,.78),
+        0 8px 28px rgba(77,128,255,.22),
         inset 0  1px 0 rgba(255,255,255,.07),
         inset 0 -1px 0 rgba(0,0,0,.25);
     }
@@ -279,7 +276,7 @@
     .ss-placeholder svg  { width: 32px; height: 32px; fill: rgba(255,255,255,.1); }
     .ss-placeholder span { font-size: 12px; color: rgba(255,255,255,.16); letter-spacing: .5px; }
 
-    /* Progress bar (runs inside the lid, between display and hinge) */
+    /* Progress bar — scaleX instead of width to stay on compositor thread */
     .ss-progress {
       position: absolute;
       bottom: 11px; left: 14px; right: 14px;
@@ -288,15 +285,16 @@
     }
     .ss-progress::after {
       content: '';
-      display: block;
-      height: 100%; width: 0;
+      display: block; height: 100%; width: 100%;
       background: linear-gradient(90deg, var(--blue), var(--purple));
       border-radius: 1px;
+      transform: scaleX(0);
+      transform-origin: left;
     }
     .ss-progress.running::after {
       animation: prog 4s linear;
     }
-    @keyframes prog { from { width: 0 } to { width: 100% } }
+    @keyframes prog { from { transform: scaleX(0) } to { transform: scaleX(1) } }
 
     /* Tab labels — sit above the MacBook */
     .carousel-labels {
