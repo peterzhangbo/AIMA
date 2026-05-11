@@ -485,13 +485,17 @@ struct PermissionsView: View {
                         action: { Task { await model.requestMic() } },
                         actionLabel: model.micActionLabel
                     )
-                    permRow(
-                        title: "屏幕录制（含系统音频）",
-                        ok: model.screenGranted,
-                        hint: "用于采集会议对端声音。点击按钮后会自动打开系统设置。",
-                        action: { Task { await model.probeScreen() } },
-                        actionLabel: model.checking ? "检查中…" : (model.screenGranted ? "已授权" : "请求并打开设置")
-                    )
+                    if model.screenGranted {
+                        permRow(
+                            title: "屏幕录制（含系统音频）",
+                            ok: true,
+                            hint: "用于采集会议对端声音",
+                            action: {},
+                            actionLabel: ""
+                        )
+                    } else {
+                        screenPermCard
+                    }
                 }
             }
 
@@ -697,6 +701,45 @@ struct PermissionsView: View {
         }
         .padding(12)
         .background((unsupported ? Color.red : Color.blue).opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: Screen permission card
+
+    /// macOS 15 不再自动把 App 写入 TCC 列表，需要用户手动点 + 添加。
+    /// 此卡片给出三步引导，按钮直接打开系统设置对应页面。
+    @ViewBuilder
+    private var screenPermCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(.orange)
+                    .font(.title2)
+                Text("屏幕录制（含系统音频）")
+                    .font(.headline)
+                Spacer()
+                Button("打开系统设置") {
+                    SystemAudioRecorder.openScreenCaptureSettings()
+                }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("macOS 15 需手动添加，按以下步骤操作：")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Label("点击右上角「打开系统设置」", systemImage: "1.circle.fill")
+                    .font(.callout)
+                Label("在「录屏与系统录音」或「仅系统录音」区域点击 \(Image(systemName: "plus")) 号", systemImage: "2.circle.fill")
+                    .font(.callout)
+                Label("从应用程序文件夹选择 AIMA.app 并添加", systemImage: "3.circle.fill")
+                    .font(.callout)
+                Label("回到这里点「重新检查」", systemImage: "4.circle.fill")
+                    .font(.callout)
+            }
+            .foregroundStyle(.primary)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
