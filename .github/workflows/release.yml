@@ -26,10 +26,9 @@ jobs:
           CERTIFICATE_PWD:    ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
           KEYCHAIN_PWD=$(openssl rand -hex 16)
-          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
 
-          # macOS base64: -D 解码，-o 输出文件
           echo "$CERTIFICATE_BASE64" | base64 -D -o "$CERT_PATH"
 
           security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
@@ -39,14 +38,21 @@ jobs:
             -k "$KEYCHAIN_PATH" \
             -P "$CERTIFICATE_PWD" \
             -T /usr/bin/codesign \
-            -T /usr/bin/security
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+
+          # 把新 keychain 加到搜索列表前面，保留原有 keychain（不替换）
+          security list-keychain -d user -s \
+            "$KEYCHAIN_PATH" \
+            ~/Library/Keychains/login.keychain-db
+
+          # 允许 codesign 无弹窗访问私钥
           security set-key-partition-list \
-            -S apple-tool:,apple: \
+            -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
 
-          # 验证证书已导入
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          # 验证：在所有 keychain 里能找到证书
+          security find-identity -v -p codesigning
 
       # ── 4. 存储公证凭据 ───────────────────────────────────────────
       - name: Store notarytool credentials
