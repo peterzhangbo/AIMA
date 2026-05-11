@@ -140,20 +140,20 @@
       border-radius: 50%;
     }
 
-    /* Crossfade slides — grid-area stacks them in one cell */
+    /* Crossfade slides — absolute stack inside fixed-size display */
     .slide {
-      grid-area: 1 / 1;
+      position: absolute; inset: 0;
       opacity: 0;
       transition: opacity .55s ease;
       pointer-events: none;
-      min-width: 0;
       will-change: opacity;
     }
     .slide.active {
       opacity: 1;
       pointer-events: auto;
     }
-    .slide img { width: 100%; height: auto; display: block; }
+    /* object-fit:contain shows full screenshot without cropping; #000 bg fills any letterbox */
+    .slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
     /* ══════════ MacBook frame ══════════ */
     /* Use box-shadow (GPU composited) instead of filter:drop-shadow (expensive offscreen buffer) */
@@ -202,15 +202,14 @@
       pointer-events: none; z-index: 3;
     }
 
-    /* Screen content — grid stacking lets image drive height naturally */
+    /* Screen content — fixed aspect-ratio prevents layout shift on image load */
     .macbook-display {
       border-radius: 10px;
       overflow: hidden;
       background: #000;
       position: relative; z-index: 1;
       line-height: 0;
-      /* All slides occupy the same cell; tallest (active) sets the height */
-      display: grid;
+      aspect-ratio: 3/2;  /* adjust to match your screenshot ratio if needed */
     }
     /* Inset corner overlay: draws the lid-colour concave corners over the display edge */
     .macbook-display::after {
@@ -261,9 +260,9 @@
         radial-gradient(circle, rgba(255,255,255,.06) 0%, transparent 70%) right/12px 100% no-repeat;
     }
 
-    /* Placeholder when no screenshot loaded */
+    /* Placeholder fills the slide fully — parent aspect-ratio drives the size */
     .ss-placeholder {
-      aspect-ratio: 16/10;
+      width: 100%; height: 100%;
       background:
         repeating-linear-gradient(
           45deg,
@@ -705,7 +704,7 @@ Object.entries(shots).forEach(([id, src]) => {
     const el = document.getElementById(id);
     if (el) {
       el.innerHTML = '';
-      img.style.cssText = 'width:100%;height:auto;display:block;';
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
       el.appendChild(img);
     }
   };
