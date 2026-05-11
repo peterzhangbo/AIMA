@@ -1,0 +1,52 @@
+import Foundation
+
+public struct SessionPaths {
+    public let root: URL
+    public let meetingID: MeetingID
+
+    public var directory: URL { root.appendingPathComponent(meetingID.raw, isDirectory: true) }
+    public var micWav: URL { directory.appendingPathComponent("mic.wav") }
+    public var systemAudio: URL { directory.appendingPathComponent("system.m4a") }
+    public var mixedWav: URL { directory.appendingPathComponent("mixed.wav") }
+    public var transcriptDir: URL { directory.appendingPathComponent("transcript", isDirectory: true) }
+    public var transcriptJSON: URL { transcriptDir.appendingPathComponent("mixed.json") }
+    public var diarizeJSON: URL { transcriptDir.appendingPathComponent("diarize.json") }
+    public var multiSpeakerRawJSON: URL { transcriptDir.appendingPathComponent("multispeaker_raw.json") }
+    public var multiSpeakerCleanJSON: URL { transcriptDir.appendingPathComponent("multispeaker_clean.json") }
+    public var summaryDir: URL { directory.appendingPathComponent("summary", isDirectory: true) }
+    public var logFile: URL { directory.appendingPathComponent("run.log") }
+
+    public init(root: URL, meetingID: MeetingID) {
+        self.root = root
+        self.meetingID = meetingID
+    }
+
+    /// 仅凭 meetingID 推算路径（重新生成纪要等只读场景）
+    public init?(meetingID: MeetingID) {
+        let root = SessionPaths.defaultRoot()
+        self.root = root
+        self.meetingID = meetingID
+        // 验证目录存在
+        if !FileManager.default.fileExists(atPath: self.directory.path) { return nil }
+    }
+
+    public func ensureCreated() throws {
+        let fm = FileManager.default
+        for dir in [directory, transcriptDir, summaryDir] {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+    }
+
+    public static func defaultRoot() -> URL {
+        let docs = try? FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let root = (docs ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents"))
+            .appendingPathComponent("SummaryMeetingApp/sessions", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+}

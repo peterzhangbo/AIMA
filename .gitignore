@@ -1,0 +1,56 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V8
+.Trashes
+
+# Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.xcuserstate
+*.xcscheme
+xcuserdata/
+Package.resolved
+
+# Logs & sessions (用户数据，不入库)
+/sessions/
+*.log
+
+# 构建产物
+*.zip
+*.dmg
+*.pkg
+*.app
+
+# Credentials & local config
+*.env
+.env.*
+notary_credentials.sh
+build_credentials.sh
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
