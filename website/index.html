@@ -1,27 +1,23 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AIMA — 完全本地的 AI 会议助手</title>
   <meta name="description" content="AIMA 是一款运行在 Mac 本地的 AI 会议助手，自动录音、转写、生成结构化纪要，所有数据不离开你的设备。">
-  <meta property="og:title" content="AIMA — 完全本地的 AI 会议助手">
-  <meta property="og:description" content="自动录音 · 转写 · 生成结构化会议纪要，完全本地运行，零数据泄露。">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --blue:   #4D80FF;
       --purple: #8C4DF2;
       --grad:   linear-gradient(135deg, #4D80FF 0%, #8C4DF2 100%);
       --bg:     #0c0c0e;
       --card:   #1e1e22;
-      --border: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,.08);
       --text:   #f0f0f2;
       --muted:  #888890;
       --radius: 14px;
     }
-
     html { scroll-behavior: smooth; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif;
@@ -34,7 +30,7 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
 
-    /* ════════════ NAV ════════════ */
+    /* ── NAV ── */
     nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
@@ -56,10 +52,8 @@
     }
     .btn-nav:hover { opacity: .85; }
 
-    /* ════════════ HERO ════════════ */
+    /* ── HERO ── */
     .hero { position: relative; overflow: hidden; padding-top: 60px; }
-
-    /* Ambient background orbs — radial-gradient already has soft edge, no blur needed */
     .hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
     .orb { position: absolute; border-radius: 50%; }
     .orb-1 {
@@ -72,20 +66,13 @@
       background: radial-gradient(ellipse, rgba(140,77,242,.10) 0%, transparent 68%);
       top: 100px; right: 5%;
     }
-
-    /* ── Hero inner: 2-col on desktop, stacked on mobile ── */
     .hero-inner {
       position: relative; z-index: 1;
       max-width: 1200px; margin: 0 auto;
-      display: grid;
-      grid-template-columns: 1fr 1.15fr;
-      gap: 56px;
-      align-items: center;
+      display: grid; grid-template-columns: 1fr 1.15fr;
+      gap: 56px; align-items: center;
       padding: 80px 60px 80px;
     }
-
-    /* Left: text */
-    .hero-text {}
     .hero-eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
       font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
@@ -102,9 +89,8 @@
     }
     .hero-subtitle {
       font-size: 15px; color: var(--muted); margin-bottom: 44px;
-      font-style: italic; line-height: 1.7;
+      line-height: 1.7;
     }
-    /* Download block: button + version as one unit, left-aligned */
     .download-block {
       display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
     }
@@ -120,47 +106,43 @@
       box-shadow: 0 10px 40px rgba(77,128,255,.5), 0 0 0 1px rgba(77,128,255,.28);
     }
     .btn-download svg { width: 18px; height: 18px; fill: currentColor; }
-    .btn-version {
-      font-size: 11.5px; color: var(--muted);
-      letter-spacing: .3px;
-    }
+    .btn-version { font-size: 11.5px; color: var(--muted); letter-spacing: .3px; }
 
-    /* Right: carousel */
+    /* ── CAROUSEL ── */
     .hero-carousel { position: relative; }
-
-    /* Soft glow behind the card — radial-gradient handles the falloff, no blur needed */
     .carousel-glow {
       position: absolute; z-index: 0;
-      width: 110%; height: 110%;
-      top: -5%; left: -5%;
+      width: 110%; height: 110%; top: -5%; left: -5%;
       background: radial-gradient(ellipse at 50% 40%,
-        rgba(77,128,255,.11) 0%,
-        rgba(140,77,242,.06) 45%,
-        transparent 70%);
-      pointer-events: none;
-      border-radius: 50%;
+        rgba(77,128,255,.11) 0%, rgba(140,77,242,.06) 45%, transparent 70%);
+      pointer-events: none; border-radius: 50%;
     }
-
-    /* Crossfade slides — absolute stack inside fixed-size display */
+    /* Crossfade slides — grid stacking, image drives height naturally */
     .slide {
-      position: absolute; inset: 0;
-      opacity: 0;
-      transition: opacity .55s ease;
-      pointer-events: none;
-      will-change: opacity;
+      grid-area: 1 / 1;
+      opacity: 0; transition: opacity .55s ease;
+      pointer-events: none; will-change: opacity;
+      min-width: 0;
     }
-    .slide.active {
-      opacity: 1;
-      pointer-events: auto;
+    .slide.active { opacity: 1; pointer-events: auto; }
+    .slide img { width: 100%; height: auto; display: block; }
+
+    /* Tab labels above MacBook */
+    .carousel-labels {
+      display: flex; justify-content: center;
+      margin-bottom: 18px; gap: 2px; position: relative; z-index: 1;
     }
-    /* object-fit:contain shows full screenshot without cropping; #000 bg fills any letterbox */
-    .slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .c-label {
+      font-size: 13px; color: rgba(255,255,255,.3);
+      cursor: pointer; padding: 6px 16px; border-radius: 20px;
+      transition: color .25s, background .25s; letter-spacing: .2px; user-select: none;
+      background: none; border: none; font-family: inherit;
+    }
+    .c-label:hover:not(.active) { color: rgba(255,255,255,.55); }
+    .c-label.active { color: var(--text); background: rgba(255,255,255,.07); }
 
-    /* ══════════ MacBook frame ══════════ */
-    /* Use box-shadow (GPU composited) instead of filter:drop-shadow (expensive offscreen buffer) */
-    .macbook { position: relative; }
-
-    /* Lid / screen body — box-shadow here replaces the expensive filter:drop-shadow on .macbook */
+    /* ── MacBook frame ── */
+    .macbook { position: relative; z-index: 1; }
     .macbook-lid {
       background: linear-gradient(165deg, #2e2e30 0%, #1b1b1d 100%);
       border-radius: 12px 12px 3px 3px;
@@ -182,46 +164,39 @@
         inset 0  1px 0 rgba(255,255,255,.07),
         inset 0 -1px 0 rgba(0,0,0,.25);
     }
-
     /* Camera dot */
     .macbook-lid::before {
       content: '';
-      position: absolute;
-      top: 8px; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
       width: 6px; height: 6px; border-radius: 50%;
       background: radial-gradient(circle at 38% 35%, #585858, #252525);
       box-shadow: 0 0 0 1px rgba(0,0,0,.6), inset 0 1px 2px rgba(255,255,255,.08);
     }
-
-    /* Subtle screen-glass reflection */
+    /* Screen reflection */
     .macbook-lid::after {
       content: '';
-      position: absolute;
-      top: 20px; left: 14px; right: 14px; bottom: 11px;
-      border-radius: 3px;
+      position: absolute; top: 20px; left: 14px; right: 14px; bottom: 11px;
+      border-radius: 10px;
       background: linear-gradient(135deg, rgba(255,255,255,.04) 0%, transparent 55%);
       pointer-events: none; z-index: 3;
     }
-
-    /* Screen content — fixed aspect-ratio prevents layout shift on image load */
+    /* Display — grid stacks slides; image drives height (no fixed aspect-ratio) */
     .macbook-display {
       border-radius: 10px;
       overflow: hidden;
       background: #000;
       position: relative; z-index: 1;
       line-height: 0;
-      aspect-ratio: 3/2;  /* adjust to match your screenshot ratio if needed */
+      display: grid;
     }
-    /* Inset corner overlay: draws the lid-colour concave corners over the display edge */
+    /* Inset corner overlay hides any gap between screenshot rounded corners and bezel */
     .macbook-display::after {
-      content: '';
-      position: absolute; inset: 0;
+      content: ''; grid-area: 1/1;
       border-radius: 10px;
       box-shadow: inset 0 0 0 1px rgba(27,27,29,.85);
       pointer-events: none; z-index: 10;
+      min-height: 1px;
     }
-
-    /* Hinge strip */
     .macbook-hinge {
       height: 5px;
       background: linear-gradient(to bottom, #0e0e10 0%, #1a1a1c 100%);
@@ -229,88 +204,49 @@
       border-right: 1px solid rgba(255,255,255,.05);
       margin: 0 5px;
     }
-
-    /* Keyboard base */
     .macbook-base {
       height: 24px;
       background: linear-gradient(165deg, #2c2c2e 0%, #1e1e20 100%);
       border-radius: 0 0 7px 7px;
-      border: 1px solid rgba(255,255,255,.09);
-      border-top: none;
-      position: relative;
-      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.09); border-top: none;
+      position: relative; overflow: hidden;
     }
-    /* Center groove (hinge recess) */
     .macbook-base::before {
       content: '';
-      position: absolute;
-      top: 0; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
       width: 18%; height: 100%;
       background: linear-gradient(to bottom, rgba(0,0,0,.25), transparent);
       border-radius: 0 0 4px 4px;
     }
-    /* Rubber feet hint */
     .macbook-base::after {
-      content: '';
-      position: absolute;
-      bottom: 3px;
-      left: 8%; right: 8%;
-      height: 2px;
+      content: ''; position: absolute; bottom: 3px; left: 8%; right: 8%; height: 2px;
       background:
         radial-gradient(circle, rgba(255,255,255,.06) 0%, transparent 70%) left/12px 100% no-repeat,
         radial-gradient(circle, rgba(255,255,255,.06) 0%, transparent 70%) right/12px 100% no-repeat;
     }
-
-    /* Placeholder fills the slide fully — parent aspect-ratio drives the size */
+    /* Placeholder — aspect-ratio acts as minimum height before images load */
     .ss-placeholder {
-      width: 100%; height: 100%;
-      background:
-        repeating-linear-gradient(
-          45deg,
-          #111116 0px, #111116 10px,
-          #0d0d11 10px, #0d0d11 20px
-        );
+      grid-area: 1/1; aspect-ratio: 16/11;
+      background: repeating-linear-gradient(45deg, #111116 0 10px, #0d0d11 10px 20px);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 12px;
     }
     .ss-placeholder svg  { width: 32px; height: 32px; fill: rgba(255,255,255,.1); }
     .ss-placeholder span { font-size: 12px; color: rgba(255,255,255,.16); letter-spacing: .5px; }
-
-    /* Progress bar — scaleX instead of width to stay on compositor thread */
+    /* Progress bar */
     .ss-progress {
-      position: absolute;
-      bottom: 11px; left: 14px; right: 14px;
-      height: 2px; z-index: 4;
-      overflow: hidden; border-radius: 1px;
+      position: absolute; bottom: 11px; left: 14px; right: 14px;
+      height: 2px; z-index: 4; overflow: hidden; border-radius: 1px;
     }
     .ss-progress::after {
-      content: '';
-      display: block; height: 100%; width: 100%;
+      content: ''; display: block; height: 100%; width: 100%;
       background: linear-gradient(90deg, var(--blue), var(--purple));
-      border-radius: 1px;
-      transform: scaleX(0);
-      transform-origin: left;
+      border-radius: 1px; transform: scaleX(0); transform-origin: left;
     }
-    .ss-progress.running::after {
-      animation: prog 4s linear;
-    }
+    .ss-progress.running::after { animation: prog 4s linear; }
     @keyframes prog { from { transform: scaleX(0) } to { transform: scaleX(1) } }
 
-    /* Tab labels — sit above the MacBook */
-    .carousel-labels {
-      display: flex; justify-content: center;
-      margin-bottom: 18px; gap: 2px;
-    }
-    .c-label {
-      font-size: 13px; color: rgba(255,255,255,.3);
-      cursor: pointer; padding: 6px 16px; border-radius: 20px;
-      transition: color .25s, background .25s; letter-spacing: .2px;
-      user-select: none;
-    }
-    .c-label:hover:not(.active) { color: rgba(255,255,255,.55); }
-    .c-label.active { color: var(--text); background: rgba(255,255,255,.07); }
-
-    /* ════════════ SECTION SHARED ════════════ */
+    /* ── SECTIONS ── */
     section { padding: 80px 40px; max-width: 1200px; margin: 0 auto; }
     .section-label {
       font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
@@ -322,8 +258,8 @@
     }
     .section-sub { font-size: 15px; color: var(--muted); margin-bottom: 52px; }
 
-    /* ════════════ FEATURES ════════════ */
-    .features-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    /* Features */
+    .features-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
     .feat-card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 28px 24px;
@@ -334,8 +270,8 @@
     .feat-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
     .feat-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
-    /* ════════════ HOW IT WORKS ════════════ */
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    /* How it Works */
+    .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
     .step {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 32px 28px;
@@ -355,7 +291,7 @@
     .step-sub { font-size: 12px; color: var(--blue); font-weight: 600; margin-bottom: 10px; }
     .step-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
-    /* ════════════ REQUIREMENTS ════════════ */
+    /* Requirements */
     .req-wrap {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); overflow: hidden;
@@ -367,9 +303,7 @@
       font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
       color: var(--muted); border-bottom: 1px solid var(--border);
     }
-    .req-wrap td {
-      padding: 14px 24px; font-size: 14px; border-bottom: 1px solid var(--border);
-    }
+    .req-wrap td { padding: 14px 24px; font-size: 14px; border-bottom: 1px solid var(--border); }
     .req-wrap tr:last-child td { border-bottom: none; }
     .req-wrap td:first-child { color: var(--muted); width: 180px; }
     .req-wrap td:last-child { color: var(--text); font-weight: 500; }
@@ -379,7 +313,7 @@
       border-left: 3px solid var(--blue);
     }
 
-    /* ════════════ GET STARTED ════════════ */
+    /* Get Started */
     .start-steps { display: flex; flex-direction: column; gap: 16px; }
     .start-step {
       display: flex; align-items: flex-start; gap: 20px;
@@ -398,29 +332,37 @@
     .start-desc a:hover { text-decoration: underline; }
     code {
       font-family: "SF Mono", "Fira Code", monospace; font-size: 13px;
-      background: rgba(255,255,255,.07); padding: 2px 6px; border-radius: 4px; color: var(--text);
+      background: rgba(255,255,255,.07); padding: 2px 6px; border-radius: 4px;
     }
 
-    /* ════════════ FOOTER ════════════ */
+    /* Footer */
     footer {
-      border-top: 1px solid var(--border); padding: 36px 40px;
+      border-top: 1px solid var(--border); padding: 32px 40px;
       display: flex; align-items: center; justify-content: space-between;
       color: var(--muted); font-size: 13px; max-width: 1200px; margin: 0 auto;
     }
     footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); }
-    .footer-links { display: flex; gap: 20px; }
+    .footer-links { display: flex; gap: 20px; align-items: center; }
+    .footer-right { display: flex; align-items: center; gap: 24px; }
+    /* Language toggle */
+    .lang-switch { display: flex; align-items: center; gap: 6px; }
+    .lang-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; color: var(--muted); padding: 4px 10px; border-radius: 6px;
+      transition: color .2s, background .2s; font-family: inherit;
+    }
+    .lang-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .lang-btn.active { color: var(--text); background: rgba(255,255,255,.08); font-weight: 600; }
+    .lang-sep { color: var(--border); }
+
     .section-divider { border: none; border-top: 1px solid var(--border); max-width: 1200px; margin: 0 auto; }
 
-    /* ════════════ RESPONSIVE ════════════ */
+    /* Responsive */
     @media (max-width: 960px) {
       nav { padding: 0 20px; }
       section { padding-left: 20px; padding-right: 20px; }
-      .hero-inner {
-        grid-template-columns: 1fr;
-        padding: 80px 24px 60px;
-        gap: 48px;
-      }
+      .hero-inner { grid-template-columns: 1fr; padding: 80px 24px 60px; gap: 48px; }
       .hero-text { text-align: center; }
       .download-block { align-items: center; }
       .features-grid { grid-template-columns: repeat(2,1fr); }
@@ -428,14 +370,15 @@
     }
     @media (max-width: 600px) {
       .features-grid { grid-template-columns: 1fr; }
-      footer { flex-direction: column; gap: 12px; text-align: center; }
+      footer { flex-direction: column; gap: 16px; text-align: center; }
+      .footer-right { flex-direction: column; gap: 12px; }
       .c-label { font-size: 11px; padding: 3px 9px; }
     }
   </style>
 </head>
 <body>
 
-<!-- ════════════ NAV ════════════ -->
+<!-- NAV -->
 <nav>
   <div class="nav-logo grad-text">AIMA</div>
   <div class="nav-right">
@@ -443,208 +386,185 @@
       <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       GitHub
     </a>
-    <a href="#download" class="btn-nav">下载 / Download</a>
+    <a href="#download" class="btn-nav" data-i18n="navDownload">下载</a>
   </div>
 </nav>
 
-<!-- ════════════ HERO ════════════ -->
+<!-- HERO -->
 <div class="hero">
   <div class="hero-bg">
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
   </div>
-
   <div class="hero-inner">
-
-    <!-- Left: text -->
+    <!-- Left -->
     <div class="hero-text">
       <div class="hero-eyebrow">AI Meeting Assistant</div>
-      <h1 class="hero-title">完全本地的<br><span class="grad-text">AI会议助手</span></h1>
-      <p class="hero-subtitle">Your private AI meeting assistant — runs entirely on your Mac</p>
+      <h1 class="hero-title" data-i18n="heroTitle">完全本地的<br><span class="grad-text">AI会议助手</span></h1>
+      <p class="hero-subtitle" data-i18n="heroSub">隐私优先的 AI 会议助手，完全运行在你的 Mac 上</p>
       <div class="download-block">
         <a href="#" class="btn-download" id="download-btn">
           <svg viewBox="0 0 20 20"><path d="M10 14l-5-5h3V3h4v6h3l-5 5zM3 16h14v2H3v-2z"/></svg>
-          <span id="download-label">下载 AIMA</span>
+          <span id="download-label" data-i18n="heroDownload">下载 AIMA</span>
         </a>
-        <p class="btn-version" id="version-label">最新稳定版 · Apple Silicon · macOS 14+</p>
+        <p class="btn-version" id="version-label" data-i18n="heroVersion">最新稳定版 · Apple Silicon · macOS 14+</p>
       </div>
     </div>
 
-    <!-- Right: screenshot carousel -->
+    <!-- Right: carousel -->
     <div class="hero-carousel">
       <div class="carousel-glow"></div>
-
-      <!-- Tab labels at top -->
       <div class="carousel-labels" id="carousel-labels">
-        <span class="c-label active" data-idx="0">会议纪要</span>
-        <span class="c-label"        data-idx="1">录制中</span>
-        <span class="c-label"        data-idx="2">生成纪要</span>
-        <span class="c-label"        data-idx="3">权限设置</span>
+        <button class="c-label active" data-idx="0" data-i18n="tab0">会议纪要</button>
+        <button class="c-label"        data-idx="1" data-i18n="tab1">录制中</button>
+        <button class="c-label"        data-idx="2" data-i18n="tab2">生成纪要</button>
+        <button class="c-label"        data-idx="3" data-i18n="tab3">权限设置</button>
       </div>
-
-      <!-- Single MacBook; all slides crossfade inside the display -->
       <div class="macbook">
         <div class="macbook-lid">
           <div class="macbook-display">
-
             <div class="slide active" id="ss-main">
               <div class="ss-placeholder">
                 <svg viewBox="0 0 24 24"><path d="M21 3H3v18h18V3zm-2 16H5V5h14v14zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
-                <span>会议纪要截图</span>
+                <span data-i18n="ph0">会议纪要截图</span>
               </div>
             </div>
-
             <div class="slide" id="ss-recording">
               <div class="ss-placeholder">
                 <svg viewBox="0 0 24 24"><path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-                <span>录制中界面截图</span>
+                <span data-i18n="ph1">录制中截图</span>
               </div>
             </div>
-
             <div class="slide" id="ss-making">
               <div class="ss-placeholder">
                 <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-                <span>生成纪要过程截图</span>
+                <span data-i18n="ph2">生成纪要截图</span>
               </div>
             </div>
-
             <div class="slide" id="ss-permissions">
               <div class="ss-placeholder">
                 <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
-                <span>权限设置截图</span>
+                <span data-i18n="ph3">权限设置截图</span>
               </div>
             </div>
-
-          </div><!-- /macbook-display -->
+          </div>
           <div class="ss-progress" id="ss-prog"></div>
         </div>
         <div class="macbook-hinge"></div>
         <div class="macbook-base"></div>
       </div>
-
     </div>
-
   </div>
 </div>
 
 <hr class="section-divider">
 
-<!-- ════════════ FEATURES ════════════ -->
+<!-- FEATURES -->
 <section id="features">
-  <div class="section-label">Core Features</div>
-  <h2 class="section-title">为什么选择 AIMA</h2>
-  <p class="section-sub">Why AIMA — everything you need for meeting intelligence, nothing leaving your device</p>
+  <div class="section-label" data-i18n="featLabel">Core Features</div>
+  <h2 class="section-title" data-i18n="featTitle">为什么选择 AIMA</h2>
+  <p class="section-sub" data-i18n="featSub">一切在本机完成——录音、转写、纪要生成，数据永不离开你的设备</p>
   <div class="features-grid">
     <div class="feat-card">
       <span class="feat-icon">🔒</span>
-      <div class="feat-title">完全本地，零泄露</div>
-      <div class="feat-desc">录音、转写、纪要生成全部在本机完成，没有任何数据上传到服务器。隐私完全由你掌控。</div>
+      <div class="feat-title" data-i18n="feat0Title">完全本地，零泄露</div>
+      <div class="feat-desc"  data-i18n="feat0Desc">录音、转写、纪要生成全部在本机完成，没有任何数据上传到服务器。隐私完全由你掌控。</div>
     </div>
     <div class="feat-card">
       <span class="feat-icon">🎙️</span>
-      <div class="feat-title">双轨同步录音</div>
-      <div class="feat-desc">同时捕获麦克风（你的声音）和系统音频（会议对端声音），完整保留每一句话。</div>
+      <div class="feat-title" data-i18n="feat1Title">双轨同步录音</div>
+      <div class="feat-desc"  data-i18n="feat1Desc">同时捕获麦克风（你的声音）和系统音频（会议对端声音），完整保留每一句话。</div>
     </div>
     <div class="feat-card">
       <span class="feat-icon">👥</span>
-      <div class="feat-title">多人说话识别</div>
-      <div class="feat-desc">集成 pyannote.audio 说话人分离，自动识别不同发言人，生成带角色标注的转录文本。</div>
+      <div class="feat-title" data-i18n="feat2Title">多人说话识别</div>
+      <div class="feat-desc"  data-i18n="feat2Desc">集成 pyannote.audio 说话人分离，自动识别不同发言人，生成带角色标注的转录文本。</div>
     </div>
     <div class="feat-card">
       <span class="feat-icon">📋</span>
-      <div class="feat-title">结构化七节纪要</div>
-      <div class="feat-desc">固定输出：标题 · 概述 · 摘要 · 决策 · 讨论要点 · 行动项 · 风险，每次结果格式一致。</div>
+      <div class="feat-title" data-i18n="feat3Title">结构化七节纪要</div>
+      <div class="feat-desc"  data-i18n="feat3Desc">固定输出：标题 · 概述 · 摘要 · 决策 · 讨论要点 · 行动项 · 风险，每次结果格式一致。</div>
     </div>
   </div>
 </section>
 
 <hr class="section-divider">
 
-<!-- ════════════ HOW IT WORKS ════════════ -->
+<!-- HOW IT WORKS -->
 <section id="how">
-  <div class="section-label">How it Works</div>
-  <h2 class="section-title">三步完成全流程</h2>
-  <p class="section-sub">Three steps from meeting to structured notes — all automated, all local</p>
+  <div class="section-label" data-i18n="howLabel">How it Works</div>
+  <h2 class="section-title" data-i18n="howTitle">三步完成全流程</h2>
+  <p class="section-sub"    data-i18n="howSub">从会议到结构化纪要，全自动、全本地</p>
   <div class="steps">
     <div class="step">
       <span class="step-num">01</span>
-      <div class="step-sub">Record</div>
-      <div class="step-title">一键录制</div>
-      <div class="step-desc">点击开始录制，AIMA 同步采集麦克风和系统音频。支持随时暂停和恢复，不影响后续处理质量。</div>
+      <div class="step-sub"   data-i18n="step0Sub">Record</div>
+      <div class="step-title" data-i18n="step0Title">一键录制</div>
+      <div class="step-desc"  data-i18n="step0Desc">点击开始录制，AIMA 同步采集麦克风和系统音频。支持随时暂停和恢复，不影响后续处理质量。</div>
     </div>
     <div class="step">
       <span class="step-num">02</span>
-      <div class="step-sub">Transcribe + Diarize</div>
-      <div class="step-title">自动转写 + 说话人识别</div>
-      <div class="step-desc">Whisper large-v3-turbo 本地转写，支持中文和英文。pyannote 进一步分离说话人，生成带角色的逐字稿。</div>
+      <div class="step-sub"   data-i18n="step1Sub">Transcribe + Diarize</div>
+      <div class="step-title" data-i18n="step1Title">自动转写 + 说话人识别</div>
+      <div class="step-desc"  data-i18n="step1Desc">Whisper large-v3-turbo 本地转写，支持中文和英文。pyannote 进一步分离说话人，生成带角色的逐字稿。</div>
     </div>
     <div class="step">
       <span class="step-num">03</span>
-      <div class="step-sub">Summarize</div>
-      <div class="step-title">生成结构化纪要</div>
-      <div class="step-desc">Gemma 4 本地大模型根据转录内容输出七节结构化会议纪要，支持随时重新生成。</div>
+      <div class="step-sub"   data-i18n="step2Sub">Summarize</div>
+      <div class="step-title" data-i18n="step2Title">生成结构化纪要</div>
+      <div class="step-desc"  data-i18n="step2Desc">Gemma 4 本地大模型根据转录内容输出七节结构化会议纪要，支持随时重新生成。</div>
     </div>
   </div>
 </section>
 
 <hr class="section-divider">
 
-<!-- ════════════ REQUIREMENTS ════════════ -->
+<!-- REQUIREMENTS -->
 <section id="requirements">
-  <div class="section-label">System Requirements</div>
-  <h2 class="section-title">系统要求</h2>
-  <p class="section-sub">What you need to run AIMA</p>
+  <div class="section-label" data-i18n="reqLabel">System Requirements</div>
+  <h2 class="section-title" data-i18n="reqTitle">系统要求</h2>
+  <p class="section-sub"    data-i18n="reqSub">运行 AIMA 所需的环境配置</p>
   <div class="req-wrap">
     <table>
-      <thead><tr><th>组件</th><th>要求</th></tr></thead>
+      <thead><tr><th data-i18n="reqThItem">组件</th><th data-i18n="reqThReq">要求</th></tr></thead>
       <tbody>
-        <tr><td>芯片</td><td>Apple Silicon（M1 / M2 / M3 / M4 系列）</td></tr>
-        <tr><td>系统</td><td>macOS 14 Sonoma 及以上</td></tr>
-        <tr><td>内存</td><td>≥ 8GB（推荐 ≥ 16GB；内存越大，可使用的 AI 模型越强）</td></tr>
-        <tr><td>存储</td><td>3–22GB 模型缓存空间（根据内存档位自动选择模型）</td></tr>
+        <tr><td data-i18n="reqChip">芯片</td><td data-i18n="reqChipVal">Apple Silicon（M1 / M2 / M3 / M4 系列）</td></tr>
+        <tr><td data-i18n="reqOS">系统</td><td data-i18n="reqOSVal">macOS 14 Sonoma 及以上</td></tr>
+        <tr><td data-i18n="reqRAM">内存</td><td data-i18n="reqRAMVal">≥ 8GB（推荐 ≥ 16GB；内存越大，可使用的 AI 模型越强）</td></tr>
+        <tr><td data-i18n="reqStorage">存储</td><td data-i18n="reqStorageVal">3–22GB 模型缓存空间（根据内存档位自动选择模型）</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="req-note">⚠️ 暂不支持 Intel Mac。AIMA 依赖 Apple MLX 框架，该框架仅支持 Apple Silicon。</p>
+  <p class="req-note" data-i18n="reqNote">⚠️ 暂不支持 Intel Mac。AIMA 依赖 Apple MLX 框架，该框架仅支持 Apple Silicon。</p>
 </section>
 
 <hr class="section-divider">
 
-<!-- ════════════ GET STARTED ════════════ -->
+<!-- GET STARTED -->
 <section id="download">
-  <div class="section-label">Get Started</div>
-  <h2 class="section-title">三步开始使用</h2>
-  <p class="section-sub">Download, install, and follow the in-app guided setup</p>
+  <div class="section-label" data-i18n="startLabel">Get Started</div>
+  <h2 class="section-title" data-i18n="startTitle">三步开始使用</h2>
+  <p class="section-sub"    data-i18n="startSub">下载、安装，按 App 内引导完成初始化</p>
   <div class="start-steps">
     <div class="start-step">
       <div class="start-num">1</div>
       <div class="start-content">
-        <div class="start-title">下载并安装</div>
-        <div class="start-desc">
-          从 <a href="https://github.com/peterzhangbo/AIMA/releases/latest" target="_blank">GitHub Releases</a> 下载最新版 <code>AIMA-x.x.x.zip</code>，
-          解压后将 <code>AIMA.app</code> 拖入 <code>/Applications</code>。
-          首次打开时右键 → 打开，绕过 Gatekeeper 提示。
-        </div>
+        <div class="start-title" data-i18n="start0Title">下载并安装</div>
+        <div class="start-desc"  data-i18n-html="start0Desc">从 <a href="https://github.com/peterzhangbo/AIMA/releases/latest" target="_blank">GitHub Releases</a> 下载最新版 <code>AIMA-x.x.x.zip</code>，解压后将 <code>AIMA.app</code> 拖入 <code>/Applications</code>。首次打开时右键 → 打开，绕过 Gatekeeper 提示。</div>
       </div>
     </div>
     <div class="start-step">
       <div class="start-num">2</div>
       <div class="start-content">
-        <div class="start-title">按引导安装依赖</div>
-        <div class="start-desc">
-          App 内置环境检测页面，会自动检测 Homebrew、Python、ffmpeg、Whisper、Gemma 等依赖是否就绪，
-          并提供一键安装命令。首次配置约需 10–30 分钟（主要是模型下载时间）。
-        </div>
+        <div class="start-title" data-i18n="start1Title">按引导安装依赖</div>
+        <div class="start-desc"  data-i18n="start1Desc">App 内置环境检测页面，会自动检测 Homebrew、Python、ffmpeg、Whisper、Gemma 等依赖是否就绪，并提供一键安装命令。首次配置约需 10–30 分钟（主要是模型下载时间）。</div>
       </div>
     </div>
     <div class="start-step">
       <div class="start-num">3</div>
       <div class="start-content">
-        <div class="start-title">开始录制</div>
-        <div class="start-desc">
-          依赖就绪后即可录制。会议结束后 AIMA 自动处理录音并在历史列表中展示结构化纪要。
-          所有内容保存在本地，随时可查阅或重新生成。
-        </div>
+        <div class="start-title" data-i18n="start2Title">开始录制</div>
+        <div class="start-desc"  data-i18n="start2Desc">依赖就绪后即可录制。会议结束后 AIMA 自动处理录音并在历史列表中展示结构化纪要。所有内容保存在本地，随时可查阅或重新生成。</div>
       </div>
     </div>
   </div>
@@ -654,40 +574,174 @@
 <footer>
   <div>
     <span class="grad-text" style="font-weight:700;">AIMA</span>
-    &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; Made for Apple Silicon
+    &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; <span data-i18n="footerMade">Made for Apple Silicon</span>
   </div>
-  <div class="footer-links">
-    <a href="https://github.com/peterzhangbo/AIMA" target="_blank">GitHub</a>
-    <a href="https://github.com/peterzhangbo/AIMA/releases" target="_blank">Releases</a>
-    <a href="https://github.com/peterzhangbo/AIMA/issues" target="_blank">反馈 Issues</a>
+  <div class="footer-right">
+    <div class="footer-links">
+      <a href="https://github.com/peterzhangbo/AIMA" target="_blank">GitHub</a>
+      <a href="https://github.com/peterzhangbo/AIMA/releases" target="_blank">Releases</a>
+      <a href="https://github.com/peterzhangbo/AIMA/issues" target="_blank" data-i18n="footerIssues">反馈 Issues</a>
+    </div>
+    <div class="lang-switch">
+      <button class="lang-btn active" data-lang="zh">简体中文</button>
+      <span class="lang-sep">·</span>
+      <button class="lang-btn" data-lang="en">English</button>
+    </div>
   </div>
 </footer>
 
 <script>
-/* ── Dynamic download button ── */
+/* ════ Translations ════ */
+const T = {
+  zh: {
+    navDownload: '下载',
+    heroTitle: '完全本地的<br><span class="grad-text">AI会议助手</span>',
+    heroSub: '隐私优先的 AI 会议助手，完全运行在你的 Mac 上',
+    heroDownload: '下载 AIMA',
+    heroVersion: '最新稳定版 · Apple Silicon · macOS 14+',
+    tab0: '会议纪要', tab1: '录制中', tab2: '生成纪要', tab3: '权限设置',
+    ph0: '会议纪要截图', ph1: '录制中截图', ph2: '生成纪要截图', ph3: '权限设置截图',
+    featLabel: 'Core Features',
+    featTitle: '为什么选择 AIMA',
+    featSub: '一切在本机完成——录音、转写、纪要生成，数据永不离开你的设备',
+    feat0Title: '完全本地，零泄露',
+    feat0Desc: '录音、转写、纪要生成全部在本机完成，没有任何数据上传到服务器。隐私完全由你掌控。',
+    feat1Title: '双轨同步录音',
+    feat1Desc: '同时捕获麦克风（你的声音）和系统音频（会议对端声音），完整保留每一句话。',
+    feat2Title: '多人说话识别',
+    feat2Desc: '集成 pyannote.audio 说话人分离，自动识别不同发言人，生成带角色标注的转录文本。',
+    feat3Title: '结构化七节纪要',
+    feat3Desc: '固定输出：标题 · 概述 · 摘要 · 决策 · 讨论要点 · 行动项 · 风险，每次结果格式一致。',
+    howLabel: 'How it Works',
+    howTitle: '三步完成全流程',
+    howSub: '从会议到结构化纪要，全自动、全本地',
+    step0Sub: 'Record',       step0Title: '一键录制',
+    step0Desc: '点击开始录制，AIMA 同步采集麦克风和系统音频。支持随时暂停和恢复，不影响后续处理质量。',
+    step1Sub: 'Transcribe + Diarize', step1Title: '自动转写 + 说话人识别',
+    step1Desc: 'Whisper large-v3-turbo 本地转写，支持中文和英文。pyannote 进一步分离说话人，生成带角色的逐字稿。',
+    step2Sub: 'Summarize',    step2Title: '生成结构化纪要',
+    step2Desc: 'Gemma 4 本地大模型根据转录内容输出七节结构化会议纪要，支持随时重新生成。',
+    reqLabel: 'System Requirements', reqTitle: '系统要求',
+    reqSub: '运行 AIMA 所需的环境配置',
+    reqThItem: '组件', reqThReq: '要求',
+    reqChip: '芯片',   reqChipVal: 'Apple Silicon（M1 / M2 / M3 / M4 系列）',
+    reqOS: '系统',     reqOSVal: 'macOS 14 Sonoma 及以上',
+    reqRAM: '内存',    reqRAMVal: '≥ 8GB（推荐 ≥ 16GB；内存越大，可使用的 AI 模型越强）',
+    reqStorage: '存储', reqStorageVal: '3–22GB 模型缓存空间（根据内存档位自动选择模型）',
+    reqNote: '⚠️ 暂不支持 Intel Mac。AIMA 依赖 Apple MLX 框架，该框架仅支持 Apple Silicon。',
+    startLabel: 'Get Started', startTitle: '三步开始使用',
+    startSub: '下载、安装，按 App 内引导完成初始化',
+    start0Title: '下载并安装',
+    start0Desc: '从 <a href="https://github.com/peterzhangbo/AIMA/releases/latest" target="_blank">GitHub Releases</a> 下载最新版 <code>AIMA-x.x.x.zip</code>，解压后将 <code>AIMA.app</code> 拖入 <code>/Applications</code>。首次打开时右键 → 打开，绕过 Gatekeeper 提示。',
+    start1Title: '按引导安装依赖',
+    start1Desc: 'App 内置环境检测页面，会自动检测 Homebrew、Python、ffmpeg、Whisper、Gemma 等依赖是否就绪，并提供一键安装命令。首次配置约需 10–30 分钟（主要是模型下载时间）。',
+    start2Title: '开始录制',
+    start2Desc: '依赖就绪后即可录制。会议结束后 AIMA 自动处理录音并在历史列表中展示结构化纪要。所有内容保存在本地，随时可查阅或重新生成。',
+    footerMade: 'Made for Apple Silicon', footerIssues: '反馈 Issues',
+  },
+  en: {
+    navDownload: 'Download',
+    heroTitle: 'Fully Local<br><span class="grad-text">AI Meeting Assistant</span>',
+    heroSub: 'Your private AI meeting assistant — runs entirely on your Mac',
+    heroDownload: 'Download AIMA',
+    heroVersion: 'Latest · Apple Silicon · macOS 14+',
+    tab0: 'Summary', tab1: 'Recording', tab2: 'Generating', tab3: 'Settings',
+    ph0: 'Meeting notes screenshot', ph1: 'Recording screenshot',
+    ph2: 'Generating screenshot', ph3: 'Permissions screenshot',
+    featLabel: 'Core Features',
+    featTitle: 'Why Choose AIMA',
+    featSub: 'Everything for meeting intelligence — on your Mac, nothing leaving your device',
+    feat0Title: 'Fully Local, Zero Leaks',
+    feat0Desc: 'Recording, transcription, and note generation all happen on your Mac. No data is ever uploaded to any server.',
+    feat1Title: 'Dual-Track Recording',
+    feat1Desc: 'Simultaneously captures your microphone and system audio, preserving every word from both sides of the conversation.',
+    feat2Title: 'Speaker Diarization',
+    feat2Desc: 'Powered by pyannote.audio, AIMA automatically identifies different speakers and generates a role-annotated transcript.',
+    feat3Title: '7-Section Structured Notes',
+    feat3Desc: 'Consistent output every time: Title · Overview · Summary · Decisions · Discussion · Action Items · Risks.',
+    howLabel: 'How it Works',
+    howTitle: 'Three Steps to Done',
+    howSub: 'From meeting to structured notes — fully automated, fully local',
+    step0Sub: 'Record',       step0Title: 'One-Click Record',
+    step0Desc: 'Hit record and AIMA captures mic and system audio simultaneously. Pause and resume anytime.',
+    step1Sub: 'Transcribe + Diarize', step1Title: 'Transcribe + Identify Speakers',
+    step1Desc: 'Local Whisper large-v3-turbo transcribes in Chinese and English. pyannote separates speakers into a role-labelled transcript.',
+    step2Sub: 'Summarize',    step2Title: 'Generate Structured Notes',
+    step2Desc: 'Local Gemma 4 produces seven-section structured meeting notes from the transcript. Regenerate at any time.',
+    reqLabel: 'System Requirements', reqTitle: 'System Requirements',
+    reqSub: 'What you need to run AIMA',
+    reqThItem: 'Component', reqThReq: 'Requirement',
+    reqChip: 'Chip',    reqChipVal: 'Apple Silicon (M1 / M2 / M3 / M4)',
+    reqOS: 'OS',        reqOSVal: 'macOS 14 Sonoma or later',
+    reqRAM: 'Memory',   reqRAMVal: '≥ 8 GB (16 GB recommended — more RAM unlocks larger models)',
+    reqStorage: 'Storage', reqStorageVal: '3–22 GB model cache (auto-selected based on available RAM)',
+    reqNote: '⚠️ Intel Macs are not supported. AIMA relies on Apple MLX, which requires Apple Silicon.',
+    startLabel: 'Get Started', startTitle: 'Get Started in 3 Steps',
+    startSub: 'Download, install, and follow the in-app guided setup',
+    start0Title: 'Download & Install',
+    start0Desc: 'Download the latest <code>AIMA-x.x.x.zip</code> from <a href="https://github.com/peterzhangbo/AIMA/releases/latest" target="_blank">GitHub Releases</a>, unzip, and drag <code>AIMA.app</code> to <code>/Applications</code>. On first launch, right-click → Open to bypass Gatekeeper.',
+    start1Title: 'Install Dependencies',
+    start1Desc: 'The built-in environment checker detects Homebrew, Python, ffmpeg, Whisper, and Gemma, providing one-click install commands. Initial setup takes 10–30 min (mainly model download time).',
+    start2Title: 'Start Recording',
+    start2Desc: 'Once dependencies are ready, hit record. After the meeting AIMA processes audio and shows structured notes in your history. Everything stays local.',
+    footerMade: 'Made for Apple Silicon', footerIssues: 'Issues',
+  }
+};
+
+/* ════ i18n engine ════ */
+let currentLang = 'zh';
+let latestRelease = null; /* cache for re-applying after lang switch */
+
+function applyLang(lang) {
+  currentLang = lang;
+  const t = T[lang];
+  /* textContent nodes */
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (t[key] !== undefined) el.innerHTML = t[key];
+  });
+  /* innerHTML nodes (contain links/code) */
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.dataset.i18nHtml;
+    if (t[key] !== undefined) el.innerHTML = t[key];
+  });
+  /* lang buttons */
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+  /* re-apply release info if already fetched */
+  if (latestRelease) applyRelease(latestRelease);
+  try { localStorage.setItem('aima-lang', lang); } catch(e) {}
+}
+
+function applyRelease(data) {
+  const t = T[currentLang];
+  const zip = data.assets?.find(a => a.name.endsWith('.zip'));
+  const btn = document.getElementById('download-btn');
+  const lbl = document.getElementById('download-label');
+  const ver = document.getElementById('version-label');
+  if (zip && btn) {
+    btn.href = zip.browser_download_url;
+    lbl.textContent = `${t.heroDownload.replace('AIMA', 'AIMA ' + data.tag_name)}`;
+    ver.textContent  = `${data.tag_name} · Apple Silicon · macOS 14+`;
+  } else if (btn) {
+    btn.href = 'https://github.com/peterzhangbo/AIMA/releases/latest';
+  }
+}
+
+/* ════ GitHub release ════ */
 (async () => {
   try {
     const res  = await fetch('https://api.github.com/repos/peterzhangbo/AIMA/releases/latest');
-    const data = await res.json();
-    const zip  = data.assets?.find(a => a.name.endsWith('.zip'));
-    const btn  = document.getElementById('download-btn');
-    const lbl  = document.getElementById('download-label');
-    const ver  = document.getElementById('version-label');
-    if (zip) {
-      btn.href = zip.browser_download_url;
-      lbl.textContent = `下载 AIMA ${data.tag_name}`;
-      ver.textContent = `${data.tag_name} · Apple Silicon · macOS 14+`;
-    } else {
-      btn.href = 'https://github.com/peterzhangbo/AIMA/releases/latest';
-      lbl.textContent = '前往 GitHub 下载';
-    }
-  } catch {
+    latestRelease = await res.json();
+    applyRelease(latestRelease);
+  } catch(e) {
     const btn = document.getElementById('download-btn');
     if (btn) btn.href = 'https://github.com/peterzhangbo/AIMA/releases/latest';
   }
 })();
 
-/* ── Load actual screenshots into slide divs ── */
+/* ════ Load screenshots ════ */
 const shots = {
   'ss-main':        'assets/screenshot-summary.png',
   'ss-recording':   'assets/screenshot-recording.png',
@@ -701,13 +755,13 @@ Object.entries(shots).forEach(([id, src]) => {
     const el = document.getElementById(id);
     if (el) {
       el.innerHTML = '';
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+      img.style.cssText = 'width:100%;height:auto;display:block;';
       el.appendChild(img);
     }
   };
 });
 
-/* ── Carousel (crossfade, single MacBook shell) ── */
+/* ════ Carousel ════ */
 const INTERVAL = 4000;
 const slides = document.querySelectorAll('.slide');
 const labels = document.querySelectorAll('.c-label');
@@ -720,16 +774,15 @@ function goTo(idx) {
   labels.forEach((l, i) => l.classList.toggle('active', i === current));
   if (prog) {
     prog.classList.remove('running');
-    void prog.offsetWidth; /* reflow restarts animation */
+    void prog.offsetWidth;
     prog.classList.add('running');
   }
   clearInterval(timer);
   timer = setInterval(() => goTo(current + 1), INTERVAL);
 }
-
 labels.forEach(l => l.addEventListener('click', () => goTo(+l.dataset.idx)));
 
-/* Swipe on display */
+/* Swipe */
 const display = document.querySelector('.macbook-display');
 let tx = null;
 display.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
@@ -740,6 +793,14 @@ display.addEventListener('touchend',   e => {
   tx = null;
 }, { passive: true });
 
+/* ════ Language switch ════ */
+document.querySelectorAll('.lang-btn').forEach(b => {
+  b.addEventListener('click', () => applyLang(b.dataset.lang));
+});
+
+/* ════ Init ════ */
+const savedLang = (() => { try { return localStorage.getItem('aima-lang'); } catch(e) { return null; } })();
+applyLang(savedLang || 'zh');
 goTo(0);
 </script>
 </body>
