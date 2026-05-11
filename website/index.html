@@ -97,18 +97,16 @@
     }
     .hero-title {
       font-size: clamp(38px, 4vw, 58px);
-      font-weight: 800; line-height: 1.1; letter-spacing: -2px;
-      margin-bottom: 14px;
+      font-weight: 800; line-height: 1.15; letter-spacing: 2px;
+      margin-bottom: 18px;
     }
     .hero-subtitle {
-      font-size: 15px; color: var(--muted); margin-bottom: 26px;
-      font-style: italic;
+      font-size: 15px; color: var(--muted); margin-bottom: 44px;
+      font-style: italic; line-height: 1.7;
     }
-    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 36px; }
-    .badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-      background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--text);
+    /* Download block: button + version as one unit, left-aligned */
+    .download-block {
+      display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
     }
     .btn-download {
       display: inline-flex; align-items: center; gap: 10px;
@@ -122,7 +120,10 @@
       box-shadow: 0 10px 40px rgba(77,128,255,.5), 0 0 0 1px rgba(77,128,255,.28);
     }
     .btn-download svg { width: 18px; height: 18px; fill: currentColor; }
-    .btn-version { margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .btn-version {
+      font-size: 11.5px; color: var(--muted);
+      letter-spacing: .3px;
+    }
 
     /* Right: carousel */
     .hero-carousel { position: relative; }
@@ -421,7 +422,7 @@
         gap: 48px;
       }
       .hero-text { text-align: center; }
-      .badges { justify-content: center; }
+      .download-block { align-items: center; }
       .features-grid { grid-template-columns: repeat(2,1fr); }
       .steps { grid-template-columns: 1fr; }
     }
@@ -458,19 +459,15 @@
     <!-- Left: text -->
     <div class="hero-text">
       <div class="hero-eyebrow">AI Meeting Assistant</div>
-      <h1 class="hero-title">完全本地的<br><span class="grad-text">AI 会议助手</span></h1>
+      <h1 class="hero-title">完全本地的<br><span class="grad-text">AI会议助手</span></h1>
       <p class="hero-subtitle">Your private AI meeting assistant — runs entirely on your Mac</p>
-      <div class="badges">
-        <span class="badge">🍎 Apple Silicon</span>
-        <span class="badge">macOS 14+</span>
-        <span class="badge">🔒 完全离线</span>
-        <span class="badge">MIT 开源</span>
+      <div class="download-block">
+        <a href="#" class="btn-download" id="download-btn">
+          <svg viewBox="0 0 20 20"><path d="M10 14l-5-5h3V3h4v6h3l-5 5zM3 16h14v2H3v-2z"/></svg>
+          <span id="download-label">下载 AIMA</span>
+        </a>
+        <p class="btn-version" id="version-label">最新稳定版 · Apple Silicon · macOS 14+</p>
       </div>
-      <a href="#" class="btn-download" id="download-btn">
-        <svg viewBox="0 0 20 20"><path d="M10 14l-5-5h3V3h4v6h3l-5 5zM3 16h14v2H3v-2z"/></svg>
-        <span id="download-label">下载 AIMA</span>
-      </a>
-      <p class="btn-version" id="version-label">最新稳定版 · Apple Silicon · macOS 14+</p>
     </div>
 
     <!-- Right: screenshot carousel -->
