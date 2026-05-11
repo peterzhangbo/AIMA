@@ -277,15 +277,20 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
 
     // MARK: - Permission probe
 
-    /// 仅检查当前权限状态，不触发弹窗（用于静默 probe）。
-    public static func hasPermission() -> Bool {
-        CGPreflightScreenCaptureAccess()
+    /// 触发 ScreenCaptureKit TCC 注册。
+    /// 调用 SCShareableContent 是让 App 出现在「系统设置 → 录屏与系统录音」列表的
+    /// 唯一可靠方式；即使 throw（未授权），注册副作用依然生效。
+    /// CGRequestScreenCaptureAccess 是 CGWindowList 旧 API，在 macOS 14/15 上
+    /// 不会把 App 写入 ScreenCaptureKit 专属的 TCC 列表，故不再使用。
+    @discardableResult
+    public static func requestPermissionPrompt() async -> Bool {
+        // SCShareableContent 调用失败时同样会把 App 写进 TCC 列表（这是副作用）
+        _ = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        return CGPreflightScreenCaptureAccess()
     }
 
-    /// 检查是否已在 TCC 持久列表中（返回 true 意味着重启后无需再次授权）。
-    /// SCContentSharingPicker 授权是会话级的，不改变此值；
-    /// 只有用户在系统设置里通过 + 添加后，此值才为 true。
-    public static func hasPersistentPermission() -> Bool {
+    /// 仅检查当前权限状态，不触发弹窗（用于静默 probe）。
+    public static func hasPermission() -> Bool {
         CGPreflightScreenCaptureAccess()
     }
 
@@ -293,78 +298,5 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
     public static func openScreenCaptureSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
         NSWorkspace.shared.open(url)
-    }
-
-    // MARK: - SCContentSharingPicker 权限请求（macOS 14+，苹果推荐方式）
-
-    /// macOS 15 起 SCShareableContent 调用不再自动注册 TCC。
-    /// 苹果推荐通过 SCContentSharingPicker 获取"用户主动意图"授权：
-    /// 系统弹出原生选择器，用户选择屏幕后 App 即被写入 TCC 列表，后续录音无需再次询问。
-    @MainActor
-    public static func presentPickerForPermission() async -> Bool {
-        if CGPreflightScreenCaptureAccess() { return true }
-
-        return await withCheckedContinuation { continuation in
-            let picker = SCContentSharingPicker.shared
-            // 只允许选择完整屏幕（我们只需要系统音频，不需要特定窗口）
-            var config = SCContentSharingPickerConfiguration()
-            config.allowedPickerModes = [.singleDisplay]
-            picker.defaultConfiguration = config
-            picker.isActive = true
-
-            let observer = PickerObserver(continuation: continuation)
-            _pickerObserver = observer
-            picker.add(observer)
-            picker.present()
-        }
-    }
-
-    // 持有 observer 防止提前释放（fileprivate 供同文件 PickerObserver 访问）
-    fileprivate static var _pickerObserver: PickerObserver?
-}
-
-// MARK: - SCContentSharingPickerObserver
-
-fileprivate final class PickerObserver: NSObject, SCContentSharingPickerObserver, @unchecked Sendable {
-    private var continuation: CheckedContinuation<Bool, Never>?
-
-    init(continuation: CheckedContinuation<Bool, Never>) {
-        self.continuation = continuation
-    }
-
-    /// 用户选择了屏幕 → 授权成功
-    func contentSharingPicker(_ picker: SCContentSharingPicker,
-                               didUpdateWith filter: SCContentFilter,
-                               for stream: SCStream?) {
-        resume(granted: true, picker: picker)
-    }
-
-    /// 用户取消选择
-    func contentSharingPicker(_ picker: SCContentSharingPicker,
-                               didCancelFor stream: SCStream?) {
-        resume(granted: CGPreflightScreenCaptureAccess(), picker: picker)
-    }
-
-    /// 选择器启动失败（极少情况，如系统资源不足）
-    func contentSharingPickerStartDidFailWithError(_ error: any Error) {
-        // picker 引用已不在此处，直接通过 shared 清理
-        Task { @MainActor in
-            SCContentSharingPicker.shared.isActive = false
-            SystemAudioRecorder._pickerObserver = nil
-        }
-        guard let cont = continuation else { return }
-        continuation = nil
-        cont.resume(returning: false)
-    }
-
-    private func resume(granted: Bool, picker: SCContentSharingPicker) {
-        guard let cont = continuation else { return }
-        continuation = nil
-        Task { @MainActor in
-            picker.remove(self)
-            picker.isActive = false
-            SystemAudioRecorder._pickerObserver = nil
-        }
-        cont.resume(returning: granted)
     }
 }
