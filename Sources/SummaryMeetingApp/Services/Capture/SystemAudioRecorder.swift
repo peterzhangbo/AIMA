@@ -282,6 +282,13 @@ public final class SystemAudioRecorder: NSObject, SCStreamOutput, SCStreamDelega
         CGPreflightScreenCaptureAccess()
     }
 
+    /// 检查是否已在 TCC 持久列表中（返回 true 意味着重启后无需再次授权）。
+    /// SCContentSharingPicker 授权是会话级的，不改变此值；
+    /// 只有用户在系统设置里通过 + 添加后，此值才为 true。
+    public static func hasPersistentPermission() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
     /// 打开系统设置的录屏权限页。
     public static func openScreenCaptureSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!

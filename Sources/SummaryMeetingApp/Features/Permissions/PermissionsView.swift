@@ -14,6 +14,8 @@ final class PermissionsModel {
     var micGranted: Bool = MicRecorder.isAuthorized
     var screenGranted: Bool = false
     var checking: Bool = false
+    /// Picker 授权成功但尚未固定到 TCC 持久列表时显示"点 + 固定"提示
+    var showPersistentPermHint: Bool = false
 
     // MARK: Env deps
 
@@ -191,16 +193,25 @@ final class PermissionsModel {
     }
 
     /// silent=true：仅检查当前状态，不触发系统弹窗（用于 View 出现时的静默探测）。
-    /// silent=false：通过 SCContentSharingPicker 请求权限（苹果推荐方式，自动注册 TCC）。
+    /// silent=false：通过 SCContentSharingPicker 请求本次会话权限，
+    ///              完成后自动打开系统设置，引导用户固定授权（一次性操作，之后永久生效）。
     func probeScreen(silent: Bool = false) async {
         checking = true
         defer { checking = false }
         if silent {
             screenGranted = SystemAudioRecorder.hasPermission()
         } else {
-            screenGranted = await SystemAudioRecorder.presentPickerForPermission()
+            let granted = await SystemAudioRecorder.presentPickerForPermission()
+            screenGranted = granted
+            // Picker 授权是会话级的；若尚未进入 TCC 持久列表，
+            // 自动打开系统设置，引导用户点 + 固定授权（只需做一次）。
+            if granted && !SystemAudioRecorder.hasPersistentPermission() {
+                showPersistentPermHint = true
+                SystemAudioRecorder.openScreenCaptureSettings()
+            }
         }
     }
+
 
     func checkDeps() async {
         checkingDeps = true
@@ -701,9 +712,9 @@ struct PermissionsView: View {
 
     // MARK: Screen permission card
 
-    /// 未授权时显示的屏幕录制引导卡片。
-    /// 点击按钮弹出系统原生 SCContentSharingPicker，
-    /// 用户选择一次屏幕后 App 即自动注册进 TCC 列表，无需手动操作。
+    /// 屏幕录制权限卡片。
+    /// 未授权：显示 Picker 按钮 + 引导说明。
+    /// Picker 已授权但未固定（会话级）：显示"点 + 固定授权"提示。
     @ViewBuilder
     private var screenPermCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -726,12 +737,30 @@ struct PermissionsView: View {
                 }
                 .disabled(model.checking)
             }
+
             Divider()
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle").foregroundStyle(.secondary)
-                Text("点击「授权录制」后系统弹出屏幕选择窗口，选择任意屏幕即可完成授权，无需手动添加。")
+
+            if model.showPersistentPermHint {
+                // Picker 授权成功，但是会话级的——引导用户一次性固定
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("本次已授权，但每次启动仍需重复操作。", systemImage: "checkmark.circle")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                    Text("在刚刚弹出的系统设置里：点击「录屏与系统录音」或「仅系统录音」下方的 **+** 号，选择 AIMA.app 添加——只需做一次，之后永久生效。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("再次打开系统设置") {
+                        SystemAudioRecorder.openScreenCaptureSettings()
+                    }
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle").foregroundStyle(.secondary)
+                    Text("点击「授权录制」，在弹出的窗口中选择任意屏幕，即可完成本次授权。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(12)
