@@ -1,5 +1,7 @@
 import Foundation
 import AVFoundation
+import CoreAudio
+import AudioToolbox
 
 /// 麦克风录音器。
 /// 优先用 AVAudioEngine（installTap → AVAudioFile），完全绕开 AVAudioRecorder；
@@ -37,7 +39,20 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
                           userInfo: [NSLocalizedDescriptionKey: "麦克风未授权——\(label)"])
         }
 
-        // ── 预检 2：目录可写 ──────────────────────────────────────────
+        // ── 预检 2：是否有可用的音频输入设备 ─────────────────────────
+        // sr=0/ch=0 是 CoreAudio "没有输入设备" 的信号，必须在这里给用户明确提示，
+        // 而不是让后续所有 API 静默失败后报一个误导性的错误。
+        let inputDevices = Self.availableInputDevices()
+        print("[MicRecorder] 可用输入设备：\(inputDevices.isEmpty ? "无" : inputDevices.joined(separator: ", "))")
+        if inputDevices.isEmpty {
+            throw NSError(domain: "MicRecorder", code: 13,
+                          userInfo: [NSLocalizedDescriptionKey:
+                            "未检测到麦克风设备。\n"
+                            + "请检查：系统设置 → 声音 → 输入，确认列表中有可用的输入设备。\n"
+                            + "如果你使用的是 Mac Mini / Mac Studio，需要连接外置麦克风。"])
+        }
+
+        // ── 预检 3：目录可写 ──────────────────────────────────────────
         let parent = url.deletingLastPathComponent()
         if !FileManager.default.fileExists(atPath: parent.path) {
             try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -241,5 +256,58 @@ public final class MicRecorder: NSObject, @unchecked Sendable {
         let engine = AVAudioEngine()
         let sr = engine.inputNode.inputFormat(forBus: 0).sampleRate
         return sr > 0 ? sr : 48_000.0
+    }
+
+    /// CoreAudio 级别枚举所有有输入声道的音频设备名称。
+    /// 返回空数组 = 系统没有任何可录音的输入设备（物理上没有麦克风）。
+    static func availableInputDevices() -> [String] {
+        var propAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope:    kAudioObjectPropertyScopeGlobal,
+            mElement:  kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject), &propAddr, 0, nil, &dataSize
+        ) == noErr, dataSize > 0 else { return [] }
+
+        let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &propAddr, 0, nil, &dataSize, &deviceIDs
+        ) == noErr else { return [] }
+
+        var result: [String] = []
+        for id in deviceIDs {
+            // 检查该设备是否有输入流
+            var inputAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreams,
+                mScope:    kAudioDevicePropertyScopeInput,
+                mElement:  kAudioObjectPropertyElementMain
+            )
+            var streamSize: UInt32 = 0
+            let hasInput = AudioObjectGetPropertyDataSize(
+                id, &inputAddr, 0, nil, &streamSize
+            ) == noErr && streamSize > 0
+
+            guard hasInput else { continue }
+
+            // 获取设备名称
+            var nameAddr = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceNameCFString,
+                mScope:    kAudioObjectPropertyScopeGlobal,
+                mElement:  kAudioObjectPropertyElementMain
+            )
+            var nameRef: CFString = "" as CFString
+            var nameSize = UInt32(MemoryLayout<CFString>.size)
+            if AudioObjectGetPropertyData(
+                id, &nameAddr, 0, nil, &nameSize, &nameRef
+            ) == noErr {
+                result.append(nameRef as String)
+            } else {
+                result.append("Device(\(id))")
+            }
+        }
+        return result
     }
 }

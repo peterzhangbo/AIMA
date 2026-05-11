@@ -42,8 +42,8 @@ cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIdentifier</key><string>com.saul.aima</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.20</string>
-  <key>CFBundleVersion</key><string>20</string>
+  <key>CFBundleShortVersionString</key><string>0.1.21</string>
+  <key>CFBundleVersion</key><string>21</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>录制你的讲话以生成会议纪要。</string>
