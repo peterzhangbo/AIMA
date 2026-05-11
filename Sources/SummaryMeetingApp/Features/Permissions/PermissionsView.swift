@@ -191,19 +191,14 @@ final class PermissionsModel {
     }
 
     /// silent=true：仅检查当前状态，不触发系统弹窗（用于 View 出现时的静默探测）。
-    /// silent=false：调用 SCK API 把 App 注册进 TCC 列表，然后若未授权直接打开系统设置。
+    /// silent=false：通过 SCContentSharingPicker 请求权限（苹果推荐方式，自动注册 TCC）。
     func probeScreen(silent: Bool = false) async {
         checking = true
         defer { checking = false }
         if silent {
             screenGranted = SystemAudioRecorder.hasPermission()
         } else {
-            screenGranted = await SystemAudioRecorder.requestPermissionPrompt()
-            // 注册完成后若仍未授权，直接打开系统设置的录屏权限页——
-            // 此时 App 已出现在列表里，用户只需拨动开关即可。
-            if !screenGranted {
-                SystemAudioRecorder.openScreenCaptureSettings()
-            }
+            screenGranted = await SystemAudioRecorder.presentPickerForPermission()
         }
     }
 
@@ -706,8 +701,9 @@ struct PermissionsView: View {
 
     // MARK: Screen permission card
 
-    /// macOS 15 不再自动把 App 写入 TCC 列表，需要用户手动点 + 添加。
-    /// 此卡片给出三步引导，按钮直接打开系统设置对应页面。
+    /// 未授权时显示的屏幕录制引导卡片。
+    /// 点击按钮弹出系统原生 SCContentSharingPicker，
+    /// 用户选择一次屏幕后 App 即自动注册进 TCC 列表，无需手动操作。
     @ViewBuilder
     private var screenPermCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -715,28 +711,28 @@ struct PermissionsView: View {
                 Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(.orange)
                     .font(.title2)
-                Text("屏幕录制（含系统音频）")
-                    .font(.headline)
-                Spacer()
-                Button("打开系统设置") {
-                    SystemAudioRecorder.openScreenCaptureSettings()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("屏幕录制（含系统音频）")
+                        .font(.headline)
+                    Text("用于采集会议对端声音")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
+                Spacer()
+                Button {
+                    Task { await model.probeScreen() }
+                } label: {
+                    Label(model.checking ? "请求中…" : "授权录制", systemImage: "record.circle")
+                }
+                .disabled(model.checking)
             }
             Divider()
-            VStack(alignment: .leading, spacing: 6) {
-                Text("macOS 15 需手动添加，按以下步骤操作：")
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle").foregroundStyle(.secondary)
+                Text("点击「授权录制」后系统弹出屏幕选择窗口，选择任意屏幕即可完成授权，无需手动添加。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Label("点击右上角「打开系统设置」", systemImage: "1.circle.fill")
-                    .font(.callout)
-                Label("在「录屏与系统录音」或「仅系统录音」区域点击 \(Image(systemName: "plus")) 号", systemImage: "2.circle.fill")
-                    .font(.callout)
-                Label("从应用程序文件夹选择 AIMA.app 并添加", systemImage: "3.circle.fill")
-                    .font(.callout)
-                Label("回到这里点「重新检查」", systemImage: "4.circle.fill")
-                    .font(.callout)
             }
-            .foregroundStyle(.primary)
         }
         .padding(12)
         .background(.quaternary.opacity(0.2))
