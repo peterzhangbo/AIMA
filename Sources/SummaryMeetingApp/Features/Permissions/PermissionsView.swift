@@ -191,7 +191,7 @@ final class PermissionsModel {
     }
 
     /// silent=true：仅检查当前状态，不触发系统弹窗（用于 View 出现时的静默探测）。
-    /// silent=false：调用 SCK API 把 App 注册进 TCC 列表，然后若未授权直接打开系统设置。
+    /// silent=false：调用 SCK API 尝试注册权限，仅更新授权状态。
     func probeScreen(silent: Bool = false) async {
         checking = true
         defer { checking = false }
@@ -199,11 +199,6 @@ final class PermissionsModel {
             screenGranted = SystemAudioRecorder.hasPermission()
         } else {
             screenGranted = await SystemAudioRecorder.requestPermissionPrompt()
-            // 注册完成后若仍未授权，直接打开系统设置的录屏权限页——
-            // 此时 App 已出现在列表里，用户只需拨动开关即可。
-            if !screenGranted {
-                SystemAudioRecorder.openScreenCaptureSettings()
-            }
         }
     }
 
@@ -488,9 +483,9 @@ struct PermissionsView: View {
                     permRow(
                         title: "屏幕录制（含系统音频）",
                         ok: model.screenGranted,
-                        hint: "用于采集会议对端声音。点击按钮后会自动打开系统设置。",
+                        hint: "用于采集会议对端声音。需在「系统设置 → 隐私与安全性 → 录屏与系统录音」中手动点 + 添加 AIMA.app 并开启。",
                         action: { Task { await model.probeScreen() } },
-                        actionLabel: model.checking ? "检查中…" : (model.screenGranted ? "已授权" : "请求并打开设置")
+                        actionLabel: model.checking ? "检查中…" : (model.screenGranted ? "已授权" : "请求权限")
                     )
                 }
             }
