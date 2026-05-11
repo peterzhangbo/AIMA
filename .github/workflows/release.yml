@@ -61,23 +61,19 @@ jobs:
         run: |
           bash scripts/build_release.sh
 
-      # ── 6. 发布到公开 releases 仓库 ──────────────────────────────
-      # 源码在私有仓库，zip 发布到 peterzhangbo/AIMA-releases（公开）
-      # 需在私有仓库 Secrets 中添加 RELEASE_PAT（有 public_repo 权限的 PAT）
-      - name: Publish to public releases repo
+      # ── 6. 创建 Release 并上传 App zip ──────────────────────────
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          repository: peterzhangbo/AIMA-releases
-          token: ${{ secrets.RELEASE_PAT }}
           tag_name: ${{ github.ref_name }}
           name: "AIMA v${{ steps.version.outputs.VERSION }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: false
           body: |
-            ## 下载安装
+            ## ⬇️ 下载
 
-            点击下方 **AIMA-${{ steps.version.outputs.VERSION }}.zip** 下载。
+            👉 点击下方 **`AIMA-${{ steps.version.outputs.VERSION }}.zip`** 下载 App（不要下载 Source code）
 
             **安装步骤**
             1. 解压得到 `AIMA.app`
@@ -86,3 +82,5 @@ jobs:
 
             **系统要求**：Apple Silicon · macOS 14 Sonoma 及以上
           files: .build/release/AIMA-${{ steps.version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
