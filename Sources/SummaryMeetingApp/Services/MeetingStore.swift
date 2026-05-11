@@ -107,6 +107,13 @@ public final class MeetingStore {
         }
     }
 
+    public func deleteMeeting(id: MeetingID) throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM meetings WHERE id=?", arguments: [id.raw])
+            try db.execute(sql: "DELETE FROM tasks WHERE meeting_id=?", arguments: [id.raw])
+        }
+    }
+
     public func listMeetings() throws -> [Meeting] {
         try dbQueue.read { db in
             let rows = try Row.fetchAll(db, sql: "SELECT * FROM meetings ORDER BY created_at DESC")

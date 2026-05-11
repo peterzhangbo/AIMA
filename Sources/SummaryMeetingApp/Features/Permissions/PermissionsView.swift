@@ -587,8 +587,10 @@ struct PermissionsView: View {
             async let d: Void = model.checkDeps()
             _ = await (s, d)
         }
-        // 注意：不再监听 canEnter 自动进入。即使所有必需项都通过，可选项（pyannote 等）
-        // 用户可能仍想停留在权限页继续装。统一改成手动点击"进入"按钮触发跳转。
+        // 仅当 全部必备 + 全部选备（含 pyannote）均通过 时自动进入，且只触发一次。
+        .onChange(of: allFullyOK) { _, ok in
+            if ok { onContinue() }
+        }
     }
 
     // 严格进入条件：Apple Silicon + 系统权限 + 必需工具 + 必需模型缓存（pyannote/其模型为可选）
@@ -599,6 +601,13 @@ struct PermissionsView: View {
             && model.requiredDepsOK
             && model.whisperModel.state == .ok
             && model.gemmaModel.state == .ok
+    }
+
+    /// 所有必备 + 所有选备（pyannote 包 + 模型）全部通过 → 自动进入
+    private var allFullyOK: Bool {
+        canEnter
+            && model.pyannote.state    == .ok
+            && model.pyannoteModel.state == .ok
     }
 
     private var entryBlockers: [String] {

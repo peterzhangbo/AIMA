@@ -98,10 +98,19 @@ public final class RecordingCoordinator {
             try mic.start(to: paths.micWav)
         } catch {
             let reason = "麦克风启动失败: \(error.localizedDescription)"
-            // 落盘到日志，方便外发排查
             FileHandle.standardError.write(Data("[MicRecorder] \(reason)\n".utf8))
+
+            // 无输入设备：不产生历史记录——直接清理 DB + 目录
+            let isNoDevice = error.localizedDescription.contains(MicRecorder.noDeviceMessage)
+            if isNoDevice {
+                try? store.deleteMeeting(id: id)
+                try? FileManager.default.removeItem(at: paths.directory)
+                self.currentMeetingID = nil
+                self.currentPaths = nil
+            } else {
+                markFailed(meetingID: id, reason: reason)
+            }
             self.state = .failed(message: reason)
-            markFailed(meetingID: id, reason: reason)
             return
         }
 
