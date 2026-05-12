@@ -4,6 +4,8 @@
 
 录制麦克风 + 系统音频 → Whisper 转写 → pyannote 说话人分离 → Gemma 生成结构化会议纪要。
 
+🌐 **落地页**：[peterzhangbo.github.io/AIMA](https://peterzhangbo.github.io/AIMA/)
+
 ---
 
 ## 系统要求
